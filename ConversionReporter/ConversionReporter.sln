@@ -1,0 +1,60 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConversionReporter.Domain", "src\Domain\ConversionReporter.Domain\ConversionReporter.Domain.csproj", "{78D07B6A-1C11-4114-87DC-0B65C31E3D47}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Application", "Application", "{0C3FCD33-A09B-4661-9792-E9BF8C4B5F49}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Infrastructure", "Infrastructure", "{B94A7483-8EDC-445D-B953-2AB7C3EB6BD5}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Presentation", "Presentation", "{B9DFA15B-F71B-4A82-8BF1-A6A6E20CADF7}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{0D21B257-E3E2-4275-B78E-EDC8221C653F}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{866BA297-0A30-4901-9D11-1A586554A77B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConversionReporter.Tests", "tests\ConversionReporter.Tests\ConversionReporter.Tests.csproj", "{0CCF2C3C-E17A-4140-BB1C-B96912D78DE4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConversionReporter.IntegrationTests", "tests\ConversionReporter.IntegrationTests\ConversionReporter.IntegrationTests.csproj", "{900351A0-6719-41F1-AC8F-6FDF91EE1966}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConversionReporter.Application.Contracts", "src\Application\ConversionReporter.Application.Contracts\ConversionReporter.Application.Contracts.csproj", "{FF3A5592-7C35-4D29-B7BF-70610E24579C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConversionReporter.Application", "src\Application\ConversionReporter.Application\ConversionReporter.Application.csproj", "{A56F9B08-C7C4-4717-A62D-4FED4E2B9203}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{78D07B6A-1C11-4114-87DC-0B65C31E3D47}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{78D07B6A-1C11-4114-87DC-0B65C31E3D47}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{78D07B6A-1C11-4114-87DC-0B65C31E3D47}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{78D07B6A-1C11-4114-87DC-0B65C31E3D47}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0CCF2C3C-E17A-4140-BB1C-B96912D78DE4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0CCF2C3C-E17A-4140-BB1C-B96912D78DE4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0CCF2C3C-E17A-4140-BB1C-B96912D78DE4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0CCF2C3C-E17A-4140-BB1C-B96912D78DE4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{900351A0-6719-41F1-AC8F-6FDF91EE1966}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{900351A0-6719-41F1-AC8F-6FDF91EE1966}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{900351A0-6719-41F1-AC8F-6FDF91EE1966}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{900351A0-6719-41F1-AC8F-6FDF91EE1966}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FF3A5592-7C35-4D29-B7BF-70610E24579C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FF3A5592-7C35-4D29-B7BF-70610E24579C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FF3A5592-7C35-4D29-B7BF-70610E24579C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FF3A5592-7C35-4D29-B7BF-70610E24579C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A56F9B08-C7C4-4717-A62D-4FED4E2B9203}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A56F9B08-C7C4-4717-A62D-4FED4E2B9203}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A56F9B08-C7C4-4717-A62D-4FED4E2B9203}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A56F9B08-C7C4-4717-A62D-4FED4E2B9203}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{0C3FCD33-A09B-4661-9792-E9BF8C4B5F49} = {0D21B257-E3E2-4275-B78E-EDC8221C653F}
+		{B9DFA15B-F71B-4A82-8BF1-A6A6E20CADF7} = {0D21B257-E3E2-4275-B78E-EDC8221C653F}
+		{B94A7483-8EDC-445D-B953-2AB7C3EB6BD5} = {0D21B257-E3E2-4275-B78E-EDC8221C653F}
+		{0CCF2C3C-E17A-4140-BB1C-B96912D78DE4} = {866BA297-0A30-4901-9D11-1A586554A77B}
+		{900351A0-6719-41F1-AC8F-6FDF91EE1966} = {866BA297-0A30-4901-9D11-1A586554A77B}
+		{78D07B6A-1C11-4114-87DC-0B65C31E3D47} = {0D21B257-E3E2-4275-B78E-EDC8221C653F}
+		{FF3A5592-7C35-4D29-B7BF-70610E24579C} = {0C3FCD33-A09B-4661-9792-E9BF8C4B5F49}
+		{A56F9B08-C7C4-4717-A62D-4FED4E2B9203} = {0C3FCD33-A09B-4661-9792-E9BF8C4B5F49}
+	EndGlobalSection
+EndGlobal

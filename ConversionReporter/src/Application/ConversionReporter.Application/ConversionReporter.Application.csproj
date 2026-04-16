@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <Folder Include="Actions\Commands\" />
+      <Folder Include="Common\" />
+      <Folder Include="Reports\Commands\" />
+      <Folder Include="Reports\Queries\" />
+    </ItemGroup>
+
+</Project>
