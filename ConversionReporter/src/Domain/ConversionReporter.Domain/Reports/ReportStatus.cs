@@ -4,5 +4,5 @@ public enum ReportStatus
 {
     Processing,
     Done,
-    Canceled,
+    Canceled
 }

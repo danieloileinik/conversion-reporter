@@ -7,11 +7,18 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <Folder Include="Actions\Commands\" />
-      <Folder Include="Common\" />
-      <Folder Include="Reports\Commands\" />
-      <Folder Include="Reports\Events\" />
-      <Folder Include="Reports\Queries\" />
+        <PackageReference Include="MediatR" Version="14.1.0"/>
     </ItemGroup>
+
+    <ItemGroup>
+        <Reference Include="ErrorOr">
+            <HintPath>..\..\..\..\..\.nuget\packages\erroror\2.0.1\lib\net6.0\ErrorOr.dll</HintPath>
+        </Reference>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\Domain\ConversionReporter.Domain\ConversionReporter.Domain.csproj"/>
+    </ItemGroup>
+
 
 </Project>

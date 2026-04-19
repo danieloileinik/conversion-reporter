@@ -8,13 +8,15 @@ public readonly struct ConversionRatio
     {
         Value = value;
     }
+
     public double Value { get; }
+
     public static ErrorOr<ConversionRatio> Create(long viewCount, long paymentCount)
     {
         if (paymentCount < 0) return ConversionRatioErrors.NegativePaymentCount;
         if (paymentCount == 0) return ConversionRatioErrors.ZeroPaymentCount;
         if (viewCount < 0) return ConversionRatioErrors.NegativeViewCount;
-        
+
         return new ConversionRatio((double)viewCount / paymentCount);
     }
 }
