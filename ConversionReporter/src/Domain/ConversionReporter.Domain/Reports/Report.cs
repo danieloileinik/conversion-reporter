@@ -17,7 +17,7 @@ public class Report(Guid id, Guid itemId, DateTime startDate, DateTime endDate)
 
     public DateTime EndDate { get; init; } = endDate;
 
-    public ReportStatus Status { get; private set; }
+    public ReportStatus Status { get; private set; } = ReportStatus.Processing;
 
     public ConversionRatio Ratio { get; private set; }
 

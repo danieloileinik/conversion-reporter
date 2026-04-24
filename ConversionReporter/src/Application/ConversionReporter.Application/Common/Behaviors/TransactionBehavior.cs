@@ -2,7 +2,7 @@ using ConversionReporter.Application.Common.Abstractions;
 using ConversionReporter.Application.Contracts.Common;
 using MediatR;
 
-namespace ConversionReporter.Application.Common.Behaviours;
+namespace ConversionReporter.Application.Common.Behaviors;
 
 public class TransactionBehavior<TRequest, TResponse>(IUnitOfWork unitOfWork)
     : IPipelineBehavior<TRequest, TResponse>

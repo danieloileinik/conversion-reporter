@@ -1,7 +1,7 @@
 using FluentValidation;
 using MediatR;
 
-namespace ConversionReporter.Application.Common.Behaviours;
+namespace ConversionReporter.Application.Common.Behaviors;
 
 public class ValidationBehavior<TRequest, TResponse>(IEnumerable<IValidator<TRequest>> validators)
     : IPipelineBehavior<TRequest, TResponse>

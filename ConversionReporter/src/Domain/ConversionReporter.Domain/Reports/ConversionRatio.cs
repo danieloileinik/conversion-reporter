@@ -19,4 +19,10 @@ public readonly struct ConversionRatio
 
         return new ConversionRatio((double)viewCount / paymentCount);
     }
+
+    public static ConversionRatio? Create(double value)
+    {
+        if (value < 0) return null;
+        return new ConversionRatio(value);
+    }
 }
