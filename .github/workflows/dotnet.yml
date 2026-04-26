@@ -66,11 +66,11 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             docker pull ghcr.io/${{ github.repository }}:latest
-            docker compose -f /opt/conversionreporter/docker-compose.yml down
+            docker-compose -f /opt/conversionreporter/docker-compose.yml down
 
-            docker compose -f /opt/conversionreporter/docker-compose.yml up -d postgres
+            docker-compose -f /opt/conversionreporter/docker-compose.yml up -d postgres
 
-            until docker compose -f /opt/conversionreporter/docker-compose.yml exec -T postgres pg_isready; do
+            until docker-compose -f /opt/conversionreporter/docker-compose.yml exec -T postgres pg_isready; do
               sleep 1
             done
 
@@ -82,4 +82,4 @@ jobs:
                 --project src/Infrastructure/ConversionReporter.Infrastructure.Persistence \
                 --startup-project src/Presentation/ConversionReporter.Presentation.Grpc
 
-            docker compose -f /opt/conversionreporter/docker-compose.yml up -d
+            docker-compose -f /opt/conversionreporter/docker-compose.yml up -d
