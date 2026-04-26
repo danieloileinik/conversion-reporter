@@ -64,7 +64,7 @@ jobs:
             docker run --rm \
               --network conversionreporter_default \
               --env-file /opt/conversionreporter/.env.production \
+              --entrypoint ./efbundle \
               ghcr.io/${{ github.repository }}:latest \
-              ./efbundle
 
             docker-compose -f /opt/conversionreporter/docker-compose.yml up -d conversionreporter
