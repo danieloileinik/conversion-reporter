@@ -1,3 +1,4 @@
+using ConversionReporter.Application;
 using ConversionReporter.Infrastructure.Caching;
 using ConversionReporter.Infrastructure.Persistence;
 using ConversionReporter.Infrastructure.Persistence.Common;

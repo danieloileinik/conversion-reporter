@@ -1,7 +1,0 @@
-﻿services:
-  conversionreporter:
-    image: conversionreporter
-    build:
-      context: .
-      dockerfile: ConversionReporter/Dockerfile
-

@@ -17,8 +17,7 @@ public static class DependencyInjection
     {
         services.AddDbContextPool<AppDbContext>(options =>
             options
-                .UseNpgsql(configuration.GetConnectionString("Postgres"))
-                .UseSnakeCaseNamingConvention());
+                .UseNpgsql(configuration.GetConnectionString("Postgres")));
 
         services.AddScoped<IReportRepository, ReportRepository>();
         services.AddScoped<IActionRepository, ActionRepository>();
