@@ -43,8 +43,9 @@
 
   kafka:
     image: confluentinc/cp-kafka:7.6.0
+    KAFKA_HEAP_OPTS: "-Xmx256m -Xms128m"  
     env_file:
-      - .env.production
+      - .env.local
     ports:
       - "9092:9092"
     healthcheck:
