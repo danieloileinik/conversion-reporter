@@ -17,10 +17,10 @@ jobs:
           dotnet-version: '10.0.x'
 
       - name: restore
-        run: dotnet restore
+        run: dotnet restore ConversionReporter/ConversionReporter.sln
 
       - name: build
-        run: dotnet build --no-restore
+        run: dotnet build ConversionReporter/ConversionReporter.sln --no-restore
 
       - name: unit tests
         run: dotnet test tests/ConversionReporter.Tests --no-build --verbosity normal
