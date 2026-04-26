@@ -5,7 +5,7 @@
       context: .
       dockerfile: Dockerfile
     env_file:
-      - .env.production
+      - .env.local
     depends_on:
       postgres:
         condition: service_healthy
@@ -17,7 +17,7 @@
   postgres:
     image: postgres:16
     env_file:
-      - .env.production
+      - .env.local
     ports:
       - "5432:5432"
     volumes:
