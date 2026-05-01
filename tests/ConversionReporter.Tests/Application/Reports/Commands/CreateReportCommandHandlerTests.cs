@@ -1,5 +1,5 @@
 using ConversionReporter.Application.Common.Abstractions;
-using ConversionReporter.Application.Contracts.Reports.Commands;
+using ConversionReporter.Application.Contracts.Reports.Commands.CreateReport;
 using ConversionReporter.Application.Reports.Commands.CreateReport;
 using ConversionReporter.Domain.Reports;
 using FluentAssertions;

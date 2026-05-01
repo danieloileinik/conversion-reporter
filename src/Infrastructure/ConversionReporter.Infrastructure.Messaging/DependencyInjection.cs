@@ -19,19 +19,10 @@ public static class DependencyInjection
                     new ProducerConfig { BootstrapServers = bootstrapServers })
                 .Build());
 
-        services.AddSingleton<IConsumer<string, string>>(_ =>
-            new ConsumerBuilder<string, string>(
-                    new ConsumerConfig
-                    {
-                        BootstrapServers = bootstrapServers,
-                        GroupId = "conversion-reporter",
-                        AutoOffsetReset = AutoOffsetReset.Earliest,
-                        EnableAutoCommit = false
-                    })
-                .Build());
-
         services.AddHostedService<OutboxWorker>();
         services.AddHostedService<RegisterActionConsumer>();
+        services.AddHostedService<CancelReportConsumer>();
+        services.AddHostedService<CountRatioConsumer>();
 
         return services;
     }

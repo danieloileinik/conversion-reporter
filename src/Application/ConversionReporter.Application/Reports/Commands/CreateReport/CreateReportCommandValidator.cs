@@ -1,4 +1,4 @@
-using ConversionReporter.Application.Contracts.Reports.Commands;
+using ConversionReporter.Application.Contracts.Reports.Commands.CreateReport;
 using FluentValidation;
 
 namespace ConversionReporter.Application.Reports.Commands.CreateReport;

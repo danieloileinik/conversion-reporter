@@ -1,4 +1,4 @@
-using ConversionReporter.Application.Contracts.Reports.Commands;
+using ConversionReporter.Application.Contracts.Reports.Commands.CreateReport;
 using ConversionReporter.Application.Contracts.Reports.Queries;
 using ConversionReporter.IntegrationTests.Common;
 using FluentAssertions;

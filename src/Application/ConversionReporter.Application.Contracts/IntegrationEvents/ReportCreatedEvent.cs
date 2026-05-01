@@ -1,4 +1,4 @@
-namespace ConversionReporter.Application.Reports.Events;
+namespace ConversionReporter.Application.Contracts.IntegrationEvents;
 
 public readonly record struct ReportCreatedEvent(
     Guid Id,

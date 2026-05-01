@@ -1,6 +1,6 @@
 using ConversionReporter.Application.Common.Abstractions;
+using ConversionReporter.Application.Contracts.IntegrationEvents;
 using ConversionReporter.Application.Contracts.Reports.Commands;
-using ConversionReporter.Application.Reports.Events;
 using ConversionReporter.Domain.Actions;
 using ErrorOr;
 using MediatR;

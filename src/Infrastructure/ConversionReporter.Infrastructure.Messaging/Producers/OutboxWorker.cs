@@ -22,7 +22,7 @@ public class OutboxWorker(
         {
             try
             {
-                await ProcessOutboxMessages(stoppingToken);
+                await ProduceMessage(stoppingToken);
             }
             catch (Exception ex)
             {
@@ -33,7 +33,7 @@ public class OutboxWorker(
         }
     }
 
-    private async Task ProcessOutboxMessages(CancellationToken cancellationToken)
+    private async Task ProduceMessage(CancellationToken cancellationToken)
     {
         using var scope = scopeFactory.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
