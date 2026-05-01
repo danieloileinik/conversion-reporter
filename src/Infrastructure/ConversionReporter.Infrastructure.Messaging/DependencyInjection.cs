@@ -23,6 +23,8 @@ public static class DependencyInjection
         services.AddHostedService<RegisterActionConsumer>();
         services.AddHostedService<CancelReportConsumer>();
         services.AddHostedService<CountRatioConsumer>();
+        services.AddHostedService<CreateReportConsumer>();
+
 
         return services;
     }
