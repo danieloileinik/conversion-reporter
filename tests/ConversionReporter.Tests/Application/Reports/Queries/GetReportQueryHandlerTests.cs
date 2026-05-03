@@ -10,11 +10,12 @@ namespace ConversionReporter.Tests.Application.Reports.Queries;
 public class GetReportQueryHandlerTests
 {
     private readonly GetReportQueryHandler _handler;
+    private readonly IReportReadCache _reportReadCache = Substitute.For<IReportReadCache>();
     private readonly IReportRepository _reportRepository = Substitute.For<IReportRepository>();
 
     public GetReportQueryHandlerTests()
     {
-        _handler = new GetReportQueryHandler(_reportRepository);
+        _handler = new GetReportQueryHandler(_reportRepository, _reportReadCache);
     }
 
     [Fact]
@@ -40,8 +41,8 @@ public class GetReportQueryHandlerTests
         var result = await _handler.Handle(query, CancellationToken.None);
 
         result.Should().NotBeNull();
-        result!.Id.Should().Be(report.Id);
-        result.Status.Should().Be(ReportStatus.Processing.ToString());
+        result.Id.Should().Be(report.Id);
+        result.Status.Should().Be(nameof(ReportStatus.Processing));
         result.Ratio.Should().BeNull();
     }
 

@@ -16,7 +16,7 @@ public static class DependencyInjection
         services.AddSingleton<IConnectionMultiplexer>(_ =>
             ConnectionMultiplexer.Connect(configuration.GetConnectionString("Redis")!));
 
-        services.Decorate<IReportRepository, CachedReportRepository>();
+        services.AddSingleton<IReportReadCache, ReportReadCache>();
 
         services.AddScoped<IIdempotencyRepository, IdempotencyRepository>();
 

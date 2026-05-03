@@ -5,7 +5,7 @@ using MediatR;
 
 namespace ConversionReporter.Application.Reports.Commands;
 
-public class CancelReportCommandHandler(IReportRepository reportRepository)
+public class CancelReportCommandHandler(IReportRepository reportRepository, IReportReadCache reportReadCache)
     : IRequestHandler<CancelReportCommand, ErrorOr<Success>>
 {
     public async Task<ErrorOr<Success>> Handle(
@@ -18,7 +18,7 @@ public class CancelReportCommandHandler(IReportRepository reportRepository)
             return Error.NotFound("Report.NotFound", "Report not found");
 
         report.Cancel();
-
+        await reportReadCache.InvalidateAsync(report.Id, cancellationToken);
         return Result.Success;
     }
 }

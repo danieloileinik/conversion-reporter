@@ -46,6 +46,8 @@ public class OutboxWorker(
             .ToListAsync(cancellationToken);
 
         foreach (var message in messages) await PublishMessage(message, dbContext, cancellationToken);
+
+        await dbContext.SaveChangesAsync(cancellationToken);
     }
 
     private async Task PublishMessage(
@@ -69,10 +71,6 @@ public class OutboxWorker(
         {
             message.Error = ex.Message;
             logger.LogError(ex, "Failed to publish outbox message {MessageId}", message.Id);
-        }
-        finally
-        {
-            await dbContext.SaveChangesAsync(cancellationToken);
         }
     }
 }

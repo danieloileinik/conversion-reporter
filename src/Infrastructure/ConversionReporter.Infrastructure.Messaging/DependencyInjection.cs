@@ -25,7 +25,6 @@ public static class DependencyInjection
         services.AddHostedService<CountRatioConsumer>();
         services.AddHostedService<CreateReportConsumer>();
 
-
         return services;
     }
 }

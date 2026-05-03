@@ -11,11 +11,12 @@ namespace ConversionReporter.Tests.Application.Reports.Commands;
 public class CancelReportCommandHandlerTests
 {
     private readonly CancelReportCommandHandler _handler;
+    private readonly IReportReadCache _reportReadCache = Substitute.For<IReportReadCache>();
     private readonly IReportRepository _reportRepository = Substitute.For<IReportRepository>();
 
     public CancelReportCommandHandlerTests()
     {
-        _handler = new CancelReportCommandHandler(_reportRepository);
+        _handler = new CancelReportCommandHandler(_reportRepository, _reportReadCache);
     }
 
     [Fact]
