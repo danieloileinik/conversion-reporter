@@ -1,5 +1,6 @@
 using ConversionReporter.Application.Common.Abstractions;
 using ConversionReporter.Application.Contracts.Common;
+using ErrorOr;
 using MediatR;
 
 namespace ConversionReporter.Application.Common.Behaviors;
@@ -17,6 +18,9 @@ public class TransactionBehavior<TRequest, TResponse>(IUnitOfWork unitOfWork)
             return await next(cancellationToken);
 
         var response = await next(cancellationToken);
+        if (response is IErrorOr { IsError: true })
+            return response;
+        
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return response;
     }
