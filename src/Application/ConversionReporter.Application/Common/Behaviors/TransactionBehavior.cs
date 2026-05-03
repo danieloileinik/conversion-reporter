@@ -20,7 +20,7 @@ public class TransactionBehavior<TRequest, TResponse>(IUnitOfWork unitOfWork)
         var response = await next(cancellationToken);
         if (response is IErrorOr { IsError: true })
             return response;
-        
+
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return response;
     }

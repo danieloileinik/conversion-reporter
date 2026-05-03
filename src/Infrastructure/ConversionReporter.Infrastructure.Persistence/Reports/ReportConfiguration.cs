@@ -24,8 +24,8 @@ public class ReportConfiguration : IEntityTypeConfiguration<Report>
         builder
             .Property(r => r.Ratio)
             .HasConversion(
-                r => r.Value,
-                v => ConversionRatio.Create(v)!.Value)
+                r => r!.Value,
+                v => ConversionRatio.Create(v.Value)!.Value)
             .HasColumnName("ratio");
     }
 }

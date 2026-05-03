@@ -13,6 +13,6 @@ internal static class ReportMappingExtensions
             report.StartDate,
             report.EndDate,
             report.Status.ToString(),
-            report.Ratio.Value == 0 ? null : report.Ratio.Value);
+            report.Ratio?.Value);
     }
 }

@@ -1,4 +1,5 @@
 using Confluent.Kafka;
+using ConversionReporter.Infrastructure.Messaging.Common;
 using ConversionReporter.Infrastructure.Messaging.Consumers;
 using ConversionReporter.Infrastructure.Messaging.Producers;
 using Microsoft.Extensions.Configuration;
@@ -19,6 +20,7 @@ public static class DependencyInjection
                     new ProducerConfig { BootstrapServers = bootstrapServers })
                 .Build());
 
+        services.AddSingleton<IKafkaConsumerFactory, KafkaConsumerFactory>();
         services.AddHostedService<OutboxWorker>();
         services.AddHostedService<RegisterActionConsumer>();
         services.AddHostedService<CancelReportConsumer>();

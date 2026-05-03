@@ -30,7 +30,8 @@ public class CountRatioCommandHandler(
         var result = report.CountRatio(viewCount, paymentCount);
         if (result.IsError) return result.Errors;
 
-        outboxRepository.Add("RatioCounted", new RatioCountedEvent(report.Id, report.Ratio.Value));
+        if (report.Ratio != null)
+            outboxRepository.Add("RatioCounted", new RatioCountedEvent(report.Id, report.Ratio.Value.Value));
         return Result.Success;
     }
 }
