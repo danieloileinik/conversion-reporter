@@ -59,7 +59,7 @@ jobs:
           script: |
             docker pull ghcr.io/${{ github.repository }}:latest
             
-            docker-compose -f /opt/conversionreporter/docker-compose.yml up -d redis kafka postgres
+            docker compose -f /opt/conversionreporter/docker compose.yml up -d redis kafka postgres
             
             docker run --rm \
               --network conversionreporter_default \
@@ -67,4 +67,4 @@ jobs:
               --entrypoint ./efbundle \
               ghcr.io/${{ github.repository }}:latest \
 
-            docker-compose -f /opt/conversionreporter/docker-compose.yml up -d conversionreporter
+            docker compose -f /opt/conversionreporter/docker compose.yml up -d conversionreporter
