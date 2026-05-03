@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using ConversionReporter.Domain.Reports;
 using FluentAssertions;
 
@@ -54,7 +55,7 @@ public class ReportTests
 
         report.CountRatio(100, 10);
 
-        report.Ratio.Value.Should().Be(10.0);
+        report.Ratio!.Value.Value.Should().Be(10.0);
     }
 
     [Fact]
