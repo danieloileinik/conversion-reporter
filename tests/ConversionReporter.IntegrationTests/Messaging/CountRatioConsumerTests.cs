@@ -57,7 +57,7 @@ public class CountRatioConsumerTests(IntegrationTestFixture fixture) : Integrati
         var updatedReport = await verifyRepo.GetByIdAsync(report.Id, cts.Token);
         updatedReport.Should().NotBeNull();
         updatedReport.Status.Should().Be(ReportStatus.Done);
-        updatedReport.Ratio.Value.Should().Be(2.0);
+        updatedReport.Ratio?.Value.Should().Be(2.0);
     }
 
     [Fact]

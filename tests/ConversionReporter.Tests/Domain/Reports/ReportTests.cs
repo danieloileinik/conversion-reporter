@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using ConversionReporter.Domain.Reports;
 using FluentAssertions;
 
