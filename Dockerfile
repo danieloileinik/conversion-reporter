@@ -4,7 +4,7 @@ WORKDIR /app
 RUN dotnet tool install --global dotnet-ef
 ENV PATH="$PATH:/root/.dotnet/tools"
 
-COPY ConversionReporter.sln .
+COPY ConversionReporter.slnx .
 COPY src/Domain/ConversionReporter.Domain/ConversionReporter.Domain.csproj src/Domain/ConversionReporter.Domain/
 COPY src/Application/ConversionReporter.Application.Contracts/ConversionReporter.Application.Contracts.csproj src/Application/ConversionReporter.Application.Contracts/
 COPY src/Application/ConversionReporter.Application/ConversionReporter.Application.csproj src/Application/ConversionReporter.Application/
