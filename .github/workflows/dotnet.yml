@@ -63,7 +63,7 @@ jobs:
             
             docker run --rm \
               --network conversionreporter_default \
-              --env-file /opt/conversionreporter/.env.production \
+              --env-file /opt/conversionreporter/.env.local \
               --entrypoint ./efbundle \
               ghcr.io/${{ github.repository }}:latest \
 
