@@ -1,92 +1,116 @@
 # ConversionReporter
 
 A scalable microservice that processes user actions (views/payments) and calculates conversion rates for e-commerce.
+
 ## Architecture
 
-The solution is split into four layers following Clean Architecture, with the dependency rule pointing inward toward the domain.
+Vertical Slice Architecture — each feature is a self-contained slice owning its command/query, handler, validator, and transport entry point. Cross-cutting concerns live in `Common/`.
 
 ```
 src/
-├── Domain/                                  Pure domain model, no dependencies
-│   └── ConversionReporter.Domain
-├── Application/                             Use cases, contracts, MediatR pipeline
-│   ├── ConversionReporter.Application
-│   └── ConversionReporter.Application.Contracts
-├── Infrastructure/                          External concerns
-│   ├── ConversionReporter.Infrastructure.Persistence    EF Core + Postgres
-│   ├── ConversionReporter.Infrastructure.Caching        Redis
-│   └── ConversionReporter.Infrastructure.Messaging      Kafka producer/consumers
-└── Presentation/
-    └── ConversionReporter.Presentation.Grpc             gRPC entry point
+└── ConversionReporter/
+    ├── Common/
+    │   ├── Abstractions/
+    │   └── Behaviors/
+    ├── Domain/
+    │   ├── Actions/
+    │   └── Reports/
+    ├── Features/
+    │   ├── Actions/
+    │   │   └── Commands/
+    │   │       └── RegisterAction/
+    │   └── Reports/
+    │       ├── Commands/
+    │       │   ├── CancelReport/
+    │       │   ├── CountRatio/
+    │       │   └── CreateReport/
+    │       └── Queries/
+    │           └── GetReport/
+    └── Infrastructure/
+        ├── Caching/
+        ├── Messaging/
+        │   ├── Kafka/
+        │   └── Outbox/
+        └── Persistence/
+            └── Configurations/
 ```
 
 ### CQRS
 
-Commands and queries are dispatched through MediatR and separated by intent:
+Commands and queries are dispatched through MediatR:
 
 - **Commands** (`RegisterActionCommand`, `CreateReportCommand`, `CountRatioCommand`, `CancelReportCommand`) mutate state, return `ErrorOr<Success>` or a typed response, and flow through Kafka topics.
 - **Queries** (`GetReportQuery`) implement the `IQuery` marker, bypass the transactional pipeline, and read from a Redis-backed cache before falling through to Postgres.
 
-The MediatR pipeline composes three behaviors in this order:
+MediatR pipeline order:
 
-1. `ValidationBehavior` runs FluentValidation rules and throws on failure.
-2. `IdempotencyBehavior` short-circuits duplicate `IIdempotentCommand` requests by checking a Redis key.
-3. `TransactionBehavior` skips queries, otherwise commits the `IUnitOfWork` only when the handler returns a non-error result.
+1. `ValidationBehavior` — FluentValidation, throws on failure.
+2. `IdempotencyBehavior` — short-circuits duplicate `IIdempotentCommand` requests via Redis key.
+3. `TransactionBehavior` — skips queries, commits via `SaveChangesAsync` only on non-error result.
 
-Write paths persist domain changes and outbox messages in the same EF Core transaction. The `OutboxWorker` background service polls `outbox_messages` every 5 seconds and publishes to Kafka, guaranteeing at-least-once delivery without distributed transactions.
+Write paths persist domain changes and outbox messages in the same EF Core transaction. `OutboxWorker` polls `outbox_messages` every 5 seconds and publishes to Kafka.
+
+### Slice structure
+
+```
+Features/Reports/Commands/CreateReport/
+    CreateReportCommand.cs
+    CreateReportHandler.cs
+    CreateReportValidator.cs
+    CreateReportConsumer.cs
+    CreateReportResponse.cs
+```
+
+EF Core configurations live in `Infrastructure/Persistence/Configurations/` — pure persistence mapping, no business logic.
 
 ### Reliability patterns
 
-| Concern              | Mechanism                                                           |
-|----------------------|---------------------------------------------------------------------|
-| Duplicate commands   | Redis idempotency keys, 7-day TTL                                   |
-| Event publishing     | Transactional Outbox + dedicated worker                             |
-| Read latency         | Redis read-through cache, invalidated on `Cancel`                   |
-| Consumer offsets     | `EnableAutoCommit = false`, manual commit after handler success     |
+| Concern            | Mechanism                                                       |
+|--------------------|-----------------------------------------------------------------|
+| Duplicate commands | Redis idempotency keys, 7-day TTL                               |
+| Event publishing   | Transactional Outbox + dedicated worker                         |
+| Read latency       | Redis read-through cache, invalidated on `Cancel`               |
+| Consumer offsets   | `EnableAutoCommit = false`, manual commit after handler success |
 
 ## Tech stack
 
-| Layer          | Technology                                            |
-|----------------|-------------------------------------------------------|
-| Runtime        | .NET 10                                               |
-| Language       | C# 14 (primary constructors, collection expressions)  |
-| API            | gRPC (`Grpc.AspNetCore` 2.64)                         |
-| Mediator       | MediatR 14                                            |
-| Validation     | FluentValidation 12                                   |
-| Result type    | ErrorOr 2.0                                           |
-| Database       | PostgreSQL via EF Core 10 + Npgsql                    |
-| Cache          | Redis via `StackExchange.Redis` 3.0                   |
-| Message broker | Apache Kafka via `Confluent.Kafka` 2.14               |
-| Testing        | xUnit, NSubstitute, FluentAssertions, Testcontainers  |
+| Layer          | Technology                                           |
+|----------------|------------------------------------------------------|
+| Runtime        | .NET 10                                              |
+| Language       | C# 14                                                |
+| API            | gRPC (`Grpc.AspNetCore` 2.64)                        |
+| Mediator       | MediatR 12                                           |
+| Validation     | FluentValidation 11                                  |
+| Result type    | ErrorOr 2.0                                          |
+| Database       | PostgreSQL via EF Core 10 + Npgsql                   |
+| Cache          | Redis via `StackExchange.Redis` 3.0                  |
+| Message broker | Apache Kafka via `Confluent.Kafka` 2.14              |
+| Testing        | xUnit, NSubstitute, FluentAssertions, Testcontainers |
 
 ## Domain flow
 
 ```
-Kafka topic: actions               ──▶ RegisterActionConsumer ──▶ RegisterActionCommandHandler
-Kafka topic: reports.create        ──▶ CreateReportConsumer   ──▶ CreateReportCommandHandler
-Kafka topic: reports.count-ratio   ──▶ CountRatioConsumer     ──▶ CountRatioCommandHandler
-Kafka topic: reports.cancel        ──▶ CancelReportConsumer   ──▶ CancelReportCommandHandler
+Kafka: actions              ──▶ RegisterActionConsumer ──▶ RegisterActionHandler
+Kafka: reports.create       ──▶ CreateReportConsumer   ──▶ CreateReportHandler
+Kafka: reports.count-ratio  ──▶ CountRatioConsumer     ──▶ CountRatioHandler
+Kafka: reports.cancel       ──▶ CancelReportConsumer   ──▶ CancelReportHandler
 
-gRPC: ReportService.GetReport      ──▶ GetReportQueryHandler  ──▶ Redis cache | Postgres
+gRPC:  Reports/GetReport    ──▶ GetReportHandler       ──▶ Redis | Postgres
 ```
-
-`Report` is an aggregate with three states: `Processing`, `Done`, `Canceled`. Ratio computation is a domain operation on the aggregate guarded by `ConversionRatio.Create`, which rejects zero or negative payment counts.
 
 ## Running locally
 
-Prerequisites: .NET 10 SDK, Docker (for Postgres, Redis, Kafka).
+Prerequisites: .NET 10 SDK, Docker.
 
 ```bash
 docker compose up -d postgres redis kafka
 
-dotnet ef database update \
-    --project src/Infrastructure/ConversionReporter.Infrastructure.Persistence \
-    --startup-project src/Presentation/ConversionReporter.Presentation.Grpc
+dotnet ef database update --project src/ConversionReporter
 
-dotnet run --project src/Presentation/ConversionReporter.Presentation.Grpc
+dotnet run --project src/ConversionReporter
 ```
 
-Configuration keys expected in `appsettings.json`:
+`appsettings.json`:
 
 ```json
 {
@@ -101,23 +125,19 @@ Configuration keys expected in `appsettings.json`:
 }
 ```
 
-## Calling the gRPC API
-
-The only synchronous entry point is `ReportService.GetReport`, which retrieves a report by id. The proto contract:
+## gRPC API
 
 ```proto
 syntax = "proto3";
 
-package conversion_reporter;
+package report;
 option csharp_namespace = "ConversionReporter.Grpc";
 
 service Reports {
     rpc GetReport (GetReportRequest) returns (GetReportResponse);
 }
 
-message GetReportRequest {
-    string report_id = 1;
-}
+message GetReportRequest { string report_id = 1; }
 
 message GetReportResponse {
     string id = 1;
@@ -129,128 +149,34 @@ message GetReportResponse {
 }
 ```
 
-### Sample C# client
-
-```csharp
-using Grpc.Net.Client;
-using ConversionReporter.Grpc;
-
-using var channel = GrpcChannel.ForAddress("https://localhost:5001");
-var client = new Reports.ReportsClient(channel);
-
-var response = await client.GetReportAsync(new GetReportRequest
-{
-    ReportId = "5f4e8b1a-9c3d-4a7e-b8f2-1d6c5e9a0b3f"
-});
-
-Console.WriteLine($"Status: {response.Status}, Ratio: {response.Ratio}");
-```
-
-### Sample grpcurl call
+Status codes: `OK`, `INVALID_ARGUMENT` (bad GUID), `NOT_FOUND`.
 
 ```bash
 grpcurl -plaintext \
     -d '{"report_id": "5f4e8b1a-9c3d-4a7e-b8f2-1d6c5e9a0b3f"}' \
     localhost:5001 \
-    conversion_reporter.Reports/GetReport
+    report.Reports/GetReport
 ```
 
-Status codes returned:
+## Kafka commands
 
-- `OK` — report found.
-- `INVALID_ARGUMENT` — `report_id` is not a valid GUID.
-- `NOT_FOUND` — no report with the given id.
-
-## Sending commands through Kafka
-
-All write operations are dispatched as JSON-serialized command payloads on dedicated topics. The message key is conventionally the aggregate id; the value is the command body.
-
-### Topic map
-
-| Topic                  | Command                  | Payload fields                                              |
-|------------------------|--------------------------|-------------------------------------------------------------|
-| `actions`              | `RegisterActionCommand`  | `ItemId`, `ActionType` (`View` \| `Payment`), `IdempotencyKey` |
-| `reports.create`       | `CreateReportCommand`    | `ItemId`, `StartDate`, `EndDate`, `IdempotencyKey`          |
-| `reports.count-ratio`  | `CountRatioCommand`      | `ReportId`, `IdempotencyKey`                                |
-| `reports.cancel`       | `CancelReportCommand`    | `ReportId`                                                  |
-
-### Sample C# producer
-
-```csharp
-using System.Text.Json;
-using Confluent.Kafka;
-
-var config = new ProducerConfig { BootstrapServers = "localhost:9092" };
-using var producer = new ProducerBuilder<string, string>(config).Build();
-
-var command = new
-{
-    ItemId = Guid.NewGuid(),
-    ActionType = "View",
-    IdempotencyKey = Guid.NewGuid()
-};
-
-await producer.ProduceAsync("actions", new Message<string, string>
-{
-    Key = command.ItemId.ToString(),
-    Value = JsonSerializer.Serialize(command)
-});
-```
-
-### Sample payloads
-
-Register an action:
-
-```json
-{
-  "ItemId": "8a1b3c4d-5e6f-7081-92a3-b4c5d6e7f809",
-  "ActionType": "Payment",
-  "IdempotencyKey": "f1e2d3c4-b5a6-9788-6655-443322110099"
-}
-```
-
-Create a report:
-
-```json
-{
-  "ItemId": "8a1b3c4d-5e6f-7081-92a3-b4c5d6e7f809",
-  "StartDate": "2026-04-01T00:00:00Z",
-  "EndDate":   "2026-04-30T23:59:59Z",
-  "IdempotencyKey": "a7b6c5d4-e3f2-1100-aabb-ccddeeff0011"
-}
-```
-
-Trigger ratio computation:
-
-```json
-{
-  "ReportId": "5f4e8b1a-9c3d-4a7e-b8f2-1d6c5e9a0b3f",
-  "IdempotencyKey": "0011aabb-ccdd-eeff-2233-445566778899"
-}
-```
-
-### Producing via kafka-console-producer
+| Topic                 | Command                 | Payload fields                                                  |
+|-----------------------|-------------------------|-----------------------------------------------------------------|
+| `actions`             | `RegisterActionCommand` | `ItemId`, `ActionType` (`View` \| `Payment`), `IdempotencyKey` |
+| `reports.create`      | `CreateReportCommand`   | `ItemId`, `StartDate`, `EndDate`, `IdempotencyKey`              |
+| `reports.count-ratio` | `CountRatioCommand`     | `ReportId`, `IdempotencyKey`                                    |
+| `reports.cancel`      | `CancelReportCommand`   | `ReportId`                                                      |
 
 ```bash
 echo '{"ItemId":"8a1b3c4d-5e6f-7081-92a3-b4c5d6e7f809","ActionType":"View","IdempotencyKey":"f1e2d3c4-b5a6-9788-6655-443322110099"}' \
-  | kafka-console-producer \
-      --bootstrap-server localhost:9092 \
-      --topic actions
+  | kafka-console-producer --bootstrap-server localhost:9092 --topic actions
 ```
-
-## End-to-end example
-
-1. Producer sends `RegisterActionCommand` messages to `actions` as users browse and pay.
-2. Producer sends `CreateReportCommand` to `reports.create` with the desired window. Handler persists the `Report` (status `Processing`) and writes a `ReportCreated` outbox row.
-3. `OutboxWorker` publishes `ReportCreated` to its topic; downstream services react.
-4. Producer sends `CountRatioCommand` to `reports.count-ratio`. Handler loads actions in range, computes `views / payments`, transitions the report to `Done`, and emits `RatioCounted`.
-5. Client calls `Reports/GetReport` over gRPC. First call hits Postgres and warms the Redis cache; subsequent calls return from cache until `Cancel` invalidates it.
 
 ## Testing
 
 ```bash
-dotnet test tests/ConversionReporter.Tests                 # unit tests
-dotnet test tests/ConversionReporter.IntegrationTests      # Testcontainers-backed
+dotnet test tests/ConversionReporter.Tests
+dotnet test tests/ConversionReporter.IntegrationTests
 ```
 
-Integration tests spin up Postgres, Redis, and Kafka via Testcontainers and exercise the real handlers, repositories, consumers, and the gRPC service.
+Integration tests spin up Postgres, Redis, and Kafka via Testcontainers.

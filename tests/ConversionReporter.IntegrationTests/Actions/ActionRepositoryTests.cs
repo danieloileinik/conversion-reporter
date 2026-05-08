@@ -1,7 +1,8 @@
-using ConversionReporter.Application.Common.Abstractions;
 using ConversionReporter.Domain.Actions;
+using ConversionReporter.Infrastructure.Persistence;
 using ConversionReporter.IntegrationTests.Common;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Action = ConversionReporter.Domain.Actions.Action;
 
@@ -12,17 +13,19 @@ public class ActionRepositoryTests(IntegrationTestFixture fixture) : Integration
     [Fact]
     public async Task Add_ShouldPersistAction()
     {
-        var repository = Services.GetRequiredService<IActionRepository>();
-        var uow = Services.GetRequiredService<IUnitOfWork>();
+        using var scope = Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         var itemId = Guid.NewGuid();
-        repository.Add(new Action(itemId, ActionType.View));
-        await uow.SaveChangesAsync();
+        db.Actions.Add(new Action(itemId, ActionType.View));
+        await db.SaveChangesAsync();
 
-        var actions = await repository.GetByItemIdAndPeriodAsync(
-            itemId,
-            DateTime.UtcNow.AddHours(-1),
-            DateTime.UtcNow.AddHours(1));
+        var actions = await db
+            .Actions
+            .Where(a => a.ItemId == itemId
+                        && a.CreatedAt >= DateTime.UtcNow.AddHours(-1)
+                        && a.CreatedAt <= DateTime.UtcNow.AddHours(1))
+            .ToListAsync();
 
         actions.Should().HaveCount(1);
         actions[0].Type.Should().Be(ActionType.View);

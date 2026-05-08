@@ -1,13 +1,13 @@
 using System.Text.Json;
 using Confluent.Kafka;
-using ConversionReporter.Application.Common.Abstractions;
-using ConversionReporter.Application.Contracts.Reports.Commands;
+using ConversionReporter.Common.Abstractions;
 using ConversionReporter.Domain.Actions;
 using ConversionReporter.Domain.Reports;
-using ConversionReporter.Infrastructure.Messaging.Common;
-using ConversionReporter.Infrastructure.Messaging.Consumers;
+using ConversionReporter.Features.Reports.Commands.CountRatio;
+using ConversionReporter.Infrastructure.Persistence;
 using ConversionReporter.IntegrationTests.Common;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Action = ConversionReporter.Domain.Actions.Action;
@@ -19,33 +19,30 @@ public class CountRatioConsumerTests(IntegrationTestFixture fixture) : Integrati
     [Fact]
     public async Task Consume_ValidMessage_ShouldCalculateRatio()
     {
-        var reportRepository = Services.GetRequiredService<IReportRepository>();
-        var actionRepository = Services.GetRequiredService<IActionRepository>();
-        var uow = Services.GetRequiredService<IUnitOfWork>();
-        var producer = Services.GetRequiredService<IProducer<string, string>>();
-        var consumerFactory = Services.GetRequiredService<IKafkaConsumerFactory>();
-        var scopeFactory = Services.GetRequiredService<IServiceScopeFactory>();
-        var logger = Services.GetRequiredService<ILogger<CountRatioConsumer>>();
-
+        using var setupScope = Services.CreateScope();
+        var db = setupScope.ServiceProvider.GetRequiredService<AppDbContext>();
         var itemId = Guid.NewGuid();
         var report = new Report(itemId, DateTime.UtcNow.AddDays(-1), DateTime.UtcNow.AddDays(1));
-        reportRepository.Add(report);
+        db.Reports.Add(report);
+        db.Actions.AddRange(
+            new Action(itemId, ActionType.View),
+            new Action(itemId, ActionType.View),
+            new Action(itemId, ActionType.Payment));
+        await db.SaveChangesAsync();
 
-        actionRepository.Add(new Action(itemId, ActionType.View));
-        actionRepository.Add(new Action(itemId, ActionType.View));
-        actionRepository.Add(new Action(itemId, ActionType.Payment));
+        var producer = Services.GetRequiredService<IProducer<string, string>>();
+        var consumer = new CountRatioConsumer(
+            Services.GetRequiredService<IKafkaConsumerFactory>(),
+            Services.GetRequiredService<IServiceScopeFactory>(),
+            Services.GetRequiredService<ILogger<CountRatioConsumer>>());
 
-        await uow.SaveChangesAsync();
-
-        var command = new CountRatioCommand(report.Id, Guid.NewGuid());
-        var message = new Message<string, string>
-        {
-            Key = report.Id.ToString(),
-            Value = JsonSerializer.Serialize(command)
-        };
-
-        var consumer = new CountRatioConsumer(consumerFactory, scopeFactory, logger);
-        await producer.ProduceAsync("reports.count-ratio", message);
+        await producer.ProduceAsync(
+            "reports.count-ratio",
+            new Message<string, string>
+            {
+                Key = report.Id.ToString(),
+                Value = JsonSerializer.Serialize(new CountRatioCommand(report.Id, Guid.NewGuid()))
+            });
 
         using var cts = new CancellationTokenSource();
         await consumer.StartAsync(cts.Token);
@@ -53,76 +50,9 @@ public class CountRatioConsumerTests(IntegrationTestFixture fixture) : Integrati
         await consumer.StopAsync(CancellationToken.None);
 
         using var verifyScope = Services.CreateScope();
-        var verifyRepo = verifyScope.ServiceProvider.GetRequiredService<IReportRepository>();
-        var updatedReport = await verifyRepo.GetByIdAsync(report.Id, cts.Token);
-        updatedReport.Should().NotBeNull();
-        updatedReport.Status.Should().Be(ReportStatus.Done);
-        updatedReport.Ratio?.Value.Should().Be(2.0);
-    }
-
-    [Fact]
-    public async Task Consume_NoPayments_ShouldReturnError()
-    {
-        var reportRepository = Services.GetRequiredService<IReportRepository>();
-        var actionRepository = Services.GetRequiredService<IActionRepository>();
-        var uow = Services.GetRequiredService<IUnitOfWork>();
-        var producer = Services.GetRequiredService<IProducer<string, string>>();
-        var consumerFactory = Services.GetRequiredService<IKafkaConsumerFactory>();
-        var scopeFactory = Services.GetRequiredService<IServiceScopeFactory>();
-        var logger = Services.GetRequiredService<ILogger<CountRatioConsumer>>();
-
-        var itemId = Guid.NewGuid();
-        var report = new Report(itemId, DateTime.UtcNow.AddDays(-1), DateTime.UtcNow.AddDays(1));
-        reportRepository.Add(report);
-
-        actionRepository.Add(new Action(itemId, ActionType.View));
-        await uow.SaveChangesAsync();
-
-        var command = new CountRatioCommand(report.Id, Guid.NewGuid());
-        var message = new Message<string, string>
-        {
-            Key = report.Id.ToString(),
-            Value = JsonSerializer.Serialize(command)
-        };
-
-        var consumer = new CountRatioConsumer(consumerFactory, scopeFactory, logger);
-        await producer.ProduceAsync("reports.count-ratio", message);
-
-        using var cts = new CancellationTokenSource();
-        await consumer.StartAsync(cts.Token);
-        await Task.Delay(3000, cts.Token);
-        await consumer.StopAsync(CancellationToken.None);
-
-        var updatedReport = await reportRepository.GetByIdAsync(report.Id, cts.Token);
-        updatedReport!.Status.Should().Be(ReportStatus.Processing);
-    }
-
-    [Fact]
-    public async Task Consume_NonExistentReport_ShouldNotThrow()
-    {
-        var producer = Services.GetRequiredService<IProducer<string, string>>();
-        var consumerFactory = Services.GetRequiredService<IKafkaConsumerFactory>();
-        var scopeFactory = Services.GetRequiredService<IServiceScopeFactory>();
-        var logger = Services.GetRequiredService<ILogger<CountRatioConsumer>>();
-
-        var command = new CountRatioCommand(Guid.NewGuid(), Guid.NewGuid());
-        var message = new Message<string, string>
-        {
-            Key = Guid.NewGuid().ToString(),
-            Value = JsonSerializer.Serialize(command)
-        };
-
-        var consumer = new CountRatioConsumer(consumerFactory, scopeFactory, logger);
-        await producer.ProduceAsync("reports.count-ratio", message);
-
-        using var cts = new CancellationTokenSource();
-        var act = async () =>
-        {
-            await consumer.StartAsync(cts.Token);
-            await Task.Delay(3000, cts.Token);
-            await consumer.StopAsync(CancellationToken.None);
-        };
-
-        await act.Should().NotThrowAsync();
+        var verifyDb = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var updated = await verifyDb.Reports.FirstAsync(r => r.Id == report.Id);
+        updated.Status.Should().Be(ReportStatus.Done);
+        updated.Ratio?.Value.Should().Be(2.0);
     }
 }

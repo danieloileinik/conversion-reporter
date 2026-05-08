@@ -1,9 +1,5 @@
-using ConversionReporter.Application;
-using ConversionReporter.Infrastructure.Caching;
-using ConversionReporter.Infrastructure.Messaging;
-using ConversionReporter.Infrastructure.Messaging.Common;
+using ConversionReporter.Common.Abstractions;
 using ConversionReporter.Infrastructure.Persistence;
-using ConversionReporter.Infrastructure.Persistence.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,13 +23,9 @@ public class IntegrationTestFixture : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        await Task.WhenAll(
-            _postgres.StartAsync(),
-            _redis.StartAsync(),
-            _kafka.StartAsync());
+        await Task.WhenAll(_postgres.StartAsync(), _redis.StartAsync(), _kafka.StartAsync());
 
         var services = new ServiceCollection();
-
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(
                 new Dictionary<string, string?>
@@ -46,18 +38,15 @@ public class IntegrationTestFixture : IAsyncLifetime
             .Build();
 
         services.AddLogging();
-        services.AddApplication();
-        services.AddPersistence(configuration);
-        services.AddCaching(configuration);
-        services.AddMessaging(configuration);
+        services.AddApplication(configuration);
         services.AddSingleton<IConfiguration>(configuration);
         services.AddSingleton<IKafkaConsumerFactory>(sp =>
             new TestKafkaConsumerFactory(sp.GetRequiredService<IConfiguration>()));
+
         Services = services.BuildServiceProvider();
 
         using var scope = Services.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        await dbContext.Database.MigrateAsync();
+        await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.MigrateAsync();
     }
 
     public async Task DisposeAsync()
@@ -71,14 +60,13 @@ public class IntegrationTestFixture : IAsyncLifetime
     public async Task ResetDatabaseAsync()
     {
         using var scope = Services.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        await dbContext.Actions.ExecuteDeleteAsync();
-        await dbContext.Reports.ExecuteDeleteAsync();
-        await dbContext.OutboxMessages.ExecuteDeleteAsync();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await db.Actions.ExecuteDeleteAsync();
+        await db.Reports.ExecuteDeleteAsync();
+        await db.OutboxMessages.ExecuteDeleteAsync();
 
         var redis = Services.GetRequiredService<IConnectionMultiplexer>();
-        var endpoints = redis.GetEndPoints();
-        foreach (var ep in endpoints)
+        foreach (var ep in redis.GetEndPoints())
             await redis.GetServer(ep).FlushDatabaseAsync();
     }
 }

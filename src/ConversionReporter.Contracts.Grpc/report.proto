@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+option csharp_namespace = "ConversionReporter.Grpc";
+
+package report;
+
+service Reports {
+  rpc GetReport (GetReportRequest) returns (GetReportResponse);
+}
+
+message GetReportRequest {
+  string report_id = 1;
+}
+
+message GetReportResponse {
+  string id = 1;
+  string item_id = 2;
+  string start_date = 3;
+  string end_date = 4;
+  string status = 5;
+  double ratio = 6;
+}

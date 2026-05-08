@@ -1,5 +1,5 @@
-using ConversionReporter.Application.Contracts.Reports.Commands.CreateReport;
-using ConversionReporter.Application.Contracts.Reports.Queries;
+using ConversionReporter.Features.Reports.Commands.CreateReport;
+using ConversionReporter.Features.Reports.Queries.GetReport;
 using ConversionReporter.IntegrationTests.Common;
 using FluentAssertions;
 using MediatR;

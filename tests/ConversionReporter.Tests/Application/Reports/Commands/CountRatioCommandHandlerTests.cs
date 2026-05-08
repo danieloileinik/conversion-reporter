@@ -1,36 +1,30 @@
-using ConversionReporter.Application.Common.Abstractions;
-using ConversionReporter.Application.Contracts.Reports.Commands;
-using ConversionReporter.Application.Reports.Commands.CountRatio;
 using ConversionReporter.Domain.Actions;
 using ConversionReporter.Domain.Reports;
+using ConversionReporter.Features.Reports.Commands.CountRatio;
+using ConversionReporter.Infrastructure.Persistence;
 using ErrorOr;
 using FluentAssertions;
-using NSubstitute;
+using Microsoft.EntityFrameworkCore;
 using Action = ConversionReporter.Domain.Actions.Action;
 
 namespace ConversionReporter.Tests.Application.Reports.Commands;
 
 public class CountRatioCommandHandlerTests
 {
-    private readonly IActionRepository _actionRepository = Substitute.For<IActionRepository>();
-    private readonly CountRatioCommandHandler _handler;
-    private readonly IOutboxRepository _outboxRepository = Substitute.For<IOutboxRepository>();
-    private readonly IReportRepository _reportRepository = Substitute.For<IReportRepository>();
-
-    public CountRatioCommandHandlerTests()
+    private static AppDbContext CreateDb()
     {
-        _handler = new CountRatioCommandHandler(_actionRepository, _reportRepository, _outboxRepository);
+        return new AppDbContext(
+            new DbContextOptionsBuilder<AppDbContext>()
+                .UseInMemoryDatabase(Guid.NewGuid().ToString())
+                .Options);
     }
 
     [Fact]
     public async Task Handle_WhenReportNotFound_ShouldReturnNotFoundError()
     {
-        var command = new CountRatioCommand(Guid.NewGuid(), Guid.NewGuid());
-        _reportRepository
-            .GetByIdAsync(command.ReportId, Arg.Any<CancellationToken>())
-            .Returns((Report?)null);
-
-        var result = await _handler.Handle(command, CancellationToken.None);
+        await using var db = CreateDb();
+        var result = await new CountRatioHandler(db)
+            .Handle(new CountRatioCommand(Guid.NewGuid(), Guid.NewGuid()), CancellationToken.None);
 
         result.IsError.Should().BeTrue();
         result.FirstError.Type.Should().Be(ErrorType.NotFound);
@@ -39,26 +33,15 @@ public class CountRatioCommandHandlerTests
     [Fact]
     public async Task Handle_WhenValidData_ShouldReturnSuccess()
     {
+        await using var db = CreateDb();
         var itemId = Guid.NewGuid();
         var report = new Report(itemId, DateTime.UtcNow.AddDays(-1), DateTime.UtcNow.AddDays(1));
-        var command = new CountRatioCommand(report.Id, Guid.NewGuid());
+        db.Reports.Add(report);
+        db.Actions.AddRange(new Action(itemId, ActionType.View), new Action(itemId, ActionType.Payment));
+        await db.SaveChangesAsync();
 
-        _reportRepository.GetByIdAsync(report.Id, Arg.Any<CancellationToken>()).Returns(report);
-        _actionRepository
-            .GetByItemIdAndPeriodAsync(
-                itemId,
-                Arg.Any<DateTime>(),
-                Arg.Any<DateTime>(),
-                Arg.Any<CancellationToken>())
-            .Returns(
-                new List<Action>
-                {
-                    new(itemId, ActionType.View),
-                    new(itemId, ActionType.View),
-                    new(itemId, ActionType.Payment)
-                });
-
-        var result = await _handler.Handle(command, CancellationToken.None);
+        var result = await new CountRatioHandler(db)
+            .Handle(new CountRatioCommand(report.Id, Guid.NewGuid()), CancellationToken.None);
 
         result.IsError.Should().BeFalse();
     }
@@ -66,20 +49,15 @@ public class CountRatioCommandHandlerTests
     [Fact]
     public async Task Handle_WhenNoPayments_ShouldReturnError()
     {
+        await using var db = CreateDb();
         var itemId = Guid.NewGuid();
         var report = new Report(itemId, DateTime.UtcNow.AddDays(-1), DateTime.UtcNow.AddDays(1));
-        var command = new CountRatioCommand(report.Id, Guid.NewGuid());
+        db.Reports.Add(report);
+        db.Actions.Add(new Action(itemId, ActionType.View));
+        await db.SaveChangesAsync();
 
-        _reportRepository.GetByIdAsync(report.Id, Arg.Any<CancellationToken>()).Returns(report);
-        _actionRepository
-            .GetByItemIdAndPeriodAsync(
-                itemId,
-                Arg.Any<DateTime>(),
-                Arg.Any<DateTime>(),
-                Arg.Any<CancellationToken>())
-            .Returns(new List<Action> { new(itemId, ActionType.View) });
-
-        var result = await _handler.Handle(command, CancellationToken.None);
+        var result = await new CountRatioHandler(db)
+            .Handle(new CountRatioCommand(report.Id, Guid.NewGuid()), CancellationToken.None);
 
         result.IsError.Should().BeTrue();
     }
@@ -87,26 +65,18 @@ public class CountRatioCommandHandlerTests
     [Fact]
     public async Task Handle_WhenValidData_ShouldPublishOutboxEvent()
     {
+        await using var db = CreateDb();
         var itemId = Guid.NewGuid();
         var report = new Report(itemId, DateTime.UtcNow.AddDays(-1), DateTime.UtcNow.AddDays(1));
-        var command = new CountRatioCommand(report.Id, Guid.NewGuid());
+        db.Reports.Add(report);
+        db.Actions.AddRange(new Action(itemId, ActionType.View), new Action(itemId, ActionType.Payment));
+        await db.SaveChangesAsync();
 
-        _reportRepository.GetByIdAsync(report.Id, Arg.Any<CancellationToken>()).Returns(report);
-        _actionRepository
-            .GetByItemIdAndPeriodAsync(
-                itemId,
-                Arg.Any<DateTime>(),
-                Arg.Any<DateTime>(),
-                Arg.Any<CancellationToken>())
-            .Returns(
-                new List<Action>
-                {
-                    new(itemId, ActionType.View),
-                    new(itemId, ActionType.Payment)
-                });
+        await new CountRatioHandler(db).Handle(
+            new CountRatioCommand(report.Id, Guid.NewGuid()),
+            CancellationToken.None);
+        await db.SaveChangesAsync();
 
-        await _handler.Handle(command, CancellationToken.None);
-
-        _outboxRepository.Received(1).Add("RatioCounted", Arg.Any<object>());
+        db.OutboxMessages.Should().ContainSingle(m => m.Type == "RatioCounted");
     }
 }

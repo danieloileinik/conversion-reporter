@@ -1,4 +1,4 @@
-using ConversionReporter.Application.Common.Abstractions;
+using ConversionReporter.Common.Abstractions;
 using ConversionReporter.IntegrationTests.Common;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,13 +10,11 @@ public class IdempotencyRepositoryTests(IntegrationTestFixture fixture) : Integr
     [Fact]
     public async Task SaveAsync_AndExistsAsync_ShouldPersistIdempotencyKey()
     {
-        var repository = Services.GetRequiredService<IIdempotencyRepository>();
+        var cache = Services.GetRequiredService<IIdempotencyCache>();
         var key = Guid.NewGuid();
-
-        var existsBefore = await repository.ExistsAsync(key);
-        await repository.SaveAsync(key);
-        var existsAfter = await repository.ExistsAsync(key);
-
+        var existsBefore = await cache.ExistsAsync(key);
+        await cache.SaveAsync(key);
+        var existsAfter = await cache.ExistsAsync(key);
         existsBefore.Should().BeFalse();
         existsAfter.Should().BeTrue();
     }

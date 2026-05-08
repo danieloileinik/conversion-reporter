@@ -1,7 +1,8 @@
-using ConversionReporter.Application.Common.Abstractions;
 using ConversionReporter.Domain.Reports;
+using ConversionReporter.Infrastructure.Persistence;
 using ConversionReporter.IntegrationTests.Common;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace ConversionReporter.IntegrationTests.Reports;
@@ -11,16 +12,15 @@ public class ReportRepositoryTests(IntegrationTestFixture fixture) : Integration
     [Fact]
     public async Task Add_AndGetById_ShouldPersistReport()
     {
-        var repository = Services.GetRequiredService<IReportRepository>();
-        var uow = Services.GetRequiredService<IUnitOfWork>();
+        using var scope = Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         var report = new Report(Guid.NewGuid(), DateTime.UtcNow, DateTime.UtcNow.AddDays(1));
-        repository.Add(report);
-        await uow.SaveChangesAsync();
+        db.Reports.Add(report);
+        await db.SaveChangesAsync();
 
-        var found = await repository.GetByIdAsync(report.Id);
+        var found = await db.Reports.FirstOrDefaultAsync(r => r.Id == report.Id);
         found.Should().NotBeNull();
-        found.Id.Should().Be(report.Id);
-        found.Status.Should().Be(ReportStatus.Processing);
+        found!.Status.Should().Be(ReportStatus.Processing);
     }
 }

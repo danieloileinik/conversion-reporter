@@ -9,9 +9,7 @@ public class ReportTests
     public void CountRatio_WhenValidCounts_ShouldSetStatusDone()
     {
         var report = new Report(Guid.NewGuid(), DateTime.UtcNow, DateTime.UtcNow.AddDays(1));
-
         var result = report.CountRatio(100, 10);
-
         result.IsError.Should().BeFalse();
         report.Status.Should().Be(ReportStatus.Done);
     }
@@ -20,9 +18,7 @@ public class ReportTests
     public void CountRatio_WhenPaymentCountZero_ShouldReturnError()
     {
         var report = new Report(Guid.NewGuid(), DateTime.UtcNow, DateTime.UtcNow.AddDays(1));
-
         var result = report.CountRatio(100, 0);
-
         result.IsError.Should().BeTrue();
         report.Status.Should().Be(ReportStatus.Processing);
     }
@@ -31,9 +27,7 @@ public class ReportTests
     public void CountRatio_WhenNegativePaymentCount_ShouldReturnError()
     {
         var report = new Report(Guid.NewGuid(), DateTime.UtcNow, DateTime.UtcNow.AddDays(1));
-
         var result = report.CountRatio(100, -1);
-
         result.IsError.Should().BeTrue();
     }
 
@@ -41,9 +35,7 @@ public class ReportTests
     public void CountRatio_WhenNegativeViewCount_ShouldReturnError()
     {
         var report = new Report(Guid.NewGuid(), DateTime.UtcNow, DateTime.UtcNow.AddDays(1));
-
         var result = report.CountRatio(-1, 10);
-
         result.IsError.Should().BeTrue();
     }
 
@@ -51,9 +43,7 @@ public class ReportTests
     public void CountRatio_WhenValidCounts_ShouldSetCorrectRatio()
     {
         var report = new Report(Guid.NewGuid(), DateTime.UtcNow, DateTime.UtcNow.AddDays(1));
-
         report.CountRatio(100, 10);
-
         report.Ratio!.Value.Value.Should().Be(10.0);
     }
 
@@ -61,9 +51,7 @@ public class ReportTests
     public void Cancel_ShouldSetStatusCanceled()
     {
         var report = new Report(Guid.NewGuid(), DateTime.UtcNow, DateTime.UtcNow.AddDays(1));
-
         report.Cancel();
-
         report.Status.Should().Be(ReportStatus.Canceled);
     }
 }

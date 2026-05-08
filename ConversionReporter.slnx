@@ -1,22 +1,11 @@
 <Solution>
-  <Folder Name="/src/" />
-  <Folder Name="/src/Application/">
-    <Project Path="src/Application/ConversionReporter.Application.Contracts/ConversionReporter.Application.Contracts.csproj" />
-    <Project Path="src/Application/ConversionReporter.Application/ConversionReporter.Application.csproj" />
-  </Folder>
-  <Folder Name="/src/Domain/">
-    <Project Path="src/Domain/ConversionReporter.Domain/ConversionReporter.Domain.csproj" />
-  </Folder>
-  <Folder Name="/src/Infrastructure/">
-    <Project Path="src/Infrastructure/ConversionReporter.Infrastructure.Caching/ConversionReporter.Infrastructure.Caching.csproj" />
-    <Project Path="src/Infrastructure/ConversionReporter.Infrastructure.Messaging/ConversionReporter.Infrastructure.Messaging.csproj" />
-    <Project Path="src/Infrastructure/ConversionReporter.Infrastructure.Persistence/ConversionReporter.Infrastructure.Persistence.csproj" />
-  </Folder>
-  <Folder Name="/src/Presentation/">
-    <Project Path="src/Presentation/ConversionReporter.Presentation.Grpc/ConversionReporter.Presentation.Grpc.csproj" />
-  </Folder>
-  <Folder Name="/tests/">
-    <Project Path="tests/ConversionReporter.IntegrationTests/ConversionReporter.IntegrationTests.csproj" />
-    <Project Path="tests/ConversionReporter.Tests/ConversionReporter.Tests.csproj" />
-  </Folder>
+    <Folder Name="/src/">
+        <Project Path="src/ConversionReporter.Contracts.Grpc/ConversionReporter.Contracts.Grpc.csproj"/>
+        <Project Path="src/ConversionReporter/ConversionReporter.csproj"/>
+        <Project Path="src/ConversionReporter.Contracts.Events/ConversionReporter.Contracts.Events.csproj"/>
+    </Folder>
+    <Folder Name="/tests/">
+        <Project Path="tests/ConversionReporter.IntegrationTests/ConversionReporter.IntegrationTests.csproj"/>
+        <Project Path="tests/ConversionReporter.Tests/ConversionReporter.Tests.csproj"/>
+    </Folder>
 </Solution>

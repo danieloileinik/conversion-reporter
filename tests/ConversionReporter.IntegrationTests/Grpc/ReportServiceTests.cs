@@ -1,7 +1,7 @@
-using ConversionReporter.Application.Contracts.Reports.Commands.CreateReport;
 using ConversionReporter.Domain.Reports;
+using ConversionReporter.Features.Reports.Commands.CreateReport;
+using ConversionReporter.Features.Reports.Queries.GetReport;
 using ConversionReporter.IntegrationTests.Common;
-using ConversionReporter.Presentation.Grpc.Services;
 using FluentAssertions;
 using Grpc.Core;
 using MediatR;
@@ -17,20 +17,15 @@ public class ReportServiceTests(IntegrationTestFixture fixture) : IntegrationTes
     {
         var mediator = Services.GetRequiredService<IMediator>();
         var service = new ReportService(mediator);
-
         var command = new CreateReportCommand(
             Guid.NewGuid(),
             DateTime.UtcNow,
             DateTime.UtcNow.AddDays(1),
             Guid.NewGuid());
-
         var reportId = await mediator.Send(command);
-
-        var request = new GrpcGetReportRequest { ReportId = reportId.Id.ToString() };
-        var context = new TestServerCallContext();
-
-        var response = await service.GetReport(request, context);
-
+        var response = await service.GetReport(
+            new GrpcGetReportRequest { ReportId = reportId.Id.ToString() },
+            new TestServerCallContext());
         response.Should().NotBeNull();
         response.Id.Should().Be(reportId.Id.ToString());
         response.Status.Should().Be(nameof(ReportStatus.Processing));
@@ -39,35 +34,21 @@ public class ReportServiceTests(IntegrationTestFixture fixture) : IntegrationTes
     [Fact]
     public async Task GetReport_WhenReportNotFound_ShouldThrowRpcException()
     {
-        var mediator = Services.GetRequiredService<IMediator>();
-        var service = new ReportService(mediator);
-
-        var request = new GrpcGetReportRequest { ReportId = Guid.NewGuid().ToString() };
-        var context = new TestServerCallContext();
-
-        var act = () => service.GetReport(request, context);
-
-        await act
-            .Should()
-            .ThrowAsync<RpcException>()
-            .Where(ex => ex.StatusCode == StatusCode.NotFound);
+        var service = new ReportService(Services.GetRequiredService<IMediator>());
+        var act = () => service.GetReport(
+            new GrpcGetReportRequest { ReportId = Guid.NewGuid().ToString() },
+            new TestServerCallContext());
+        await act.Should().ThrowAsync<RpcException>().Where(ex => ex.StatusCode == StatusCode.NotFound);
     }
 
     [Fact]
     public async Task GetReport_WhenInvalidId_ShouldThrowRpcException()
     {
-        var mediator = Services.GetRequiredService<IMediator>();
-        var service = new ReportService(mediator);
-
-        var request = new GrpcGetReportRequest { ReportId = "invalid-guid" };
-        var context = new TestServerCallContext();
-
-        var act = () => service.GetReport(request, context);
-
-        await act
-            .Should()
-            .ThrowAsync<RpcException>()
-            .Where(ex => ex.StatusCode == StatusCode.InvalidArgument);
+        var service = new ReportService(Services.GetRequiredService<IMediator>());
+        var act = () => service.GetReport(
+            new GrpcGetReportRequest { ReportId = "invalid-guid" },
+            new TestServerCallContext());
+        await act.Should().ThrowAsync<RpcException>().Where(ex => ex.StatusCode == StatusCode.InvalidArgument);
     }
 }
 

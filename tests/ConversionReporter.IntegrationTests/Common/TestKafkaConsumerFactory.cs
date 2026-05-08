@@ -1,5 +1,5 @@
 using Confluent.Kafka;
-using ConversionReporter.Infrastructure.Messaging.Common;
+using ConversionReporter.Common.Abstractions;
 using Microsoft.Extensions.Configuration;
 
 namespace ConversionReporter.IntegrationTests.Common;

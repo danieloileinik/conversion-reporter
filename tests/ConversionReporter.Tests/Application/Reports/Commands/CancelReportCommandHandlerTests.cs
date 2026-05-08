@@ -1,59 +1,47 @@
-using ConversionReporter.Application.Common.Abstractions;
-using ConversionReporter.Application.Contracts.Reports.Commands;
-using ConversionReporter.Application.Reports.Commands;
 using ConversionReporter.Domain.Reports;
+using ConversionReporter.Features.Reports;
+using ConversionReporter.Features.Reports.Commands.CancelReport;
+using ConversionReporter.Infrastructure.Persistence;
 using ErrorOr;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 using NSubstitute;
 
 namespace ConversionReporter.Tests.Application.Reports.Commands;
 
 public class CancelReportCommandHandlerTests
 {
-    private readonly CancelReportCommandHandler _handler;
-    private readonly IReportReadCache _reportReadCache = Substitute.For<IReportReadCache>();
-    private readonly IReportRepository _reportRepository = Substitute.For<IReportRepository>();
-
-    public CancelReportCommandHandlerTests()
+    private static AppDbContext CreateDb()
     {
-        _handler = new CancelReportCommandHandler(_reportRepository, _reportReadCache);
+        return new AppDbContext(
+            new DbContextOptionsBuilder<AppDbContext>()
+                .UseInMemoryDatabase(Guid.NewGuid().ToString())
+                .Options);
     }
 
     [Fact]
     public async Task Handle_WhenReportNotFound_ShouldReturnNotFoundError()
     {
-        var command = new CancelReportCommand(Guid.NewGuid());
-        _reportRepository
-            .GetByIdAsync(command.ReportId, Arg.Any<CancellationToken>())
-            .Returns((Report?)null);
-
-        var result = await _handler.Handle(command, CancellationToken.None);
+        await using var db = CreateDb();
+        var result = await new CancelReportHandler(db, Substitute.For<IReportReadCache>())
+            .Handle(new CancelReportCommand(Guid.NewGuid()), CancellationToken.None);
 
         result.IsError.Should().BeTrue();
         result.FirstError.Type.Should().Be(ErrorType.NotFound);
     }
 
     [Fact]
-    public async Task Handle_WhenReportExists_ShouldReturnSuccess()
-    {
-        var report = new Report(Guid.NewGuid(), DateTime.UtcNow, DateTime.UtcNow.AddDays(1));
-        var command = new CancelReportCommand(report.Id);
-        _reportRepository.GetByIdAsync(report.Id, Arg.Any<CancellationToken>()).Returns(report);
-
-        var result = await _handler.Handle(command, CancellationToken.None);
-
-        result.IsError.Should().BeFalse();
-    }
-
-    [Fact]
     public async Task Handle_WhenReportExists_ShouldCancelReport()
     {
+        await using var db = CreateDb();
         var report = new Report(Guid.NewGuid(), DateTime.UtcNow, DateTime.UtcNow.AddDays(1));
-        var command = new CancelReportCommand(report.Id);
-        _reportRepository.GetByIdAsync(report.Id, Arg.Any<CancellationToken>()).Returns(report);
+        db.Reports.Add(report);
+        await db.SaveChangesAsync();
 
-        await _handler.Handle(command, CancellationToken.None);
+        var result = await new CancelReportHandler(db, Substitute.For<IReportReadCache>())
+            .Handle(new CancelReportCommand(report.Id), CancellationToken.None);
 
+        result.IsError.Should().BeFalse();
         report.Status.Should().Be(ReportStatus.Canceled);
     }
 }

@@ -1,4 +1,4 @@
-﻿services:
+services:
   conversionreporter:
     image: conversionreporter
     build:
@@ -43,7 +43,6 @@
 
   kafka:
     image: confluentinc/cp-kafka:7.6.0
-    KAFKA_HEAP_OPTS: "-Xmx256m -Xms128m"  
     env_file:
       - .env.local
     ports:

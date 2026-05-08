@@ -1,62 +1,55 @@
-using ConversionReporter.Application.Common.Abstractions;
-using ConversionReporter.Application.Contracts.Reports.Commands.CreateReport;
-using ConversionReporter.Application.Reports.Commands.CreateReport;
-using ConversionReporter.Domain.Reports;
+using ConversionReporter.Features.Reports.Commands.CreateReport;
+using ConversionReporter.Infrastructure.Persistence;
 using FluentAssertions;
-using NSubstitute;
+using Microsoft.EntityFrameworkCore;
 
 namespace ConversionReporter.Tests.Application.Reports.Commands;
 
 public class CreateReportCommandHandlerTests
 {
-    private readonly CreateReportCommandHandler _handler;
-    private readonly IOutboxRepository _outboxRepository = Substitute.For<IOutboxRepository>();
-    private readonly IReportRepository _reportRepository = Substitute.For<IReportRepository>();
-
-    public CreateReportCommandHandlerTests()
+    private static AppDbContext CreateDb()
     {
-        _handler = new CreateReportCommandHandler(_reportRepository, _outboxRepository);
+        return new AppDbContext(
+            new DbContextOptionsBuilder<AppDbContext>()
+                .UseInMemoryDatabase(Guid.NewGuid().ToString())
+                .Options);
     }
 
     [Fact]
     public async Task Handle_WhenValidCommand_ShouldAddReport()
     {
-        var command = new CreateReportCommand(
-            Guid.NewGuid(),
-            DateTime.UtcNow,
-            DateTime.UtcNow.AddDays(1),
-            Guid.NewGuid());
+        await using var db = CreateDb();
+        await new CreateReportHandler(db)
+            .Handle(
+                new CreateReportCommand(Guid.NewGuid(), DateTime.UtcNow, DateTime.UtcNow.AddDays(1), Guid.NewGuid()),
+                CancellationToken.None);
+        await db.SaveChangesAsync();
 
-        await _handler.Handle(command, CancellationToken.None);
-
-        _reportRepository.Received(1).Add(Arg.Any<Report>());
+        db.Reports.Should().HaveCount(1);
     }
 
     [Fact]
     public async Task Handle_WhenValidCommand_ShouldPublishOutboxEvent()
     {
-        var command = new CreateReportCommand(
-            Guid.NewGuid(),
-            DateTime.UtcNow,
-            DateTime.UtcNow.AddDays(1),
-            Guid.NewGuid());
+        await using var db = CreateDb();
+        await new CreateReportHandler(db)
+            .Handle(
+                new CreateReportCommand(Guid.NewGuid(), DateTime.UtcNow, DateTime.UtcNow.AddDays(1), Guid.NewGuid()),
+                CancellationToken.None);
+        await db.SaveChangesAsync();
 
-        await _handler.Handle(command, CancellationToken.None);
-
-        _outboxRepository.Received(1).Add("ReportCreated", Arg.Any<object>());
+        db.OutboxMessages.Should().ContainSingle(m => m.Type == "ReportCreated");
     }
 
     [Fact]
-    public async Task Handle_WhenValidCommand_ShouldReturnNewGuid()
+    public async Task Handle_WhenValidCommand_ShouldReturnNewId()
     {
-        var command = new CreateReportCommand(
-            Guid.NewGuid(),
-            DateTime.UtcNow,
-            DateTime.UtcNow.AddDays(1),
-            Guid.NewGuid());
+        await using var db = CreateDb();
+        var result = await new CreateReportHandler(db)
+            .Handle(
+                new CreateReportCommand(Guid.NewGuid(), DateTime.UtcNow, DateTime.UtcNow.AddDays(1), Guid.NewGuid()),
+                CancellationToken.None);
 
-        var result = await _handler.Handle(command, CancellationToken.None);
-
-        result.Should().NotBe(Guid.Empty);
+        result.Id.Should().NotBe(Guid.Empty);
     }
 }

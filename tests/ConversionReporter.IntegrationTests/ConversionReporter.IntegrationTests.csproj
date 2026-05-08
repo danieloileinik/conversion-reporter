@@ -18,18 +18,11 @@
         <PackageReference Include="NSubstitute" Version="6.0.0-rc.1"/>
         <PackageReference Include="ErrorOr" Version="2.0.1"/>
         <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.0"/>
-        <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.4"/>
     </ItemGroup>
     <ItemGroup>
         <Using Include="Xunit"/>
     </ItemGroup>
     <ItemGroup>
-        <ProjectReference Include="..\..\src\Domain\ConversionReporter.Domain\ConversionReporter.Domain.csproj"/>
-        <ProjectReference Include="..\..\src\Application\ConversionReporter.Application\ConversionReporter.Application.csproj"/>
-        <ProjectReference Include="..\..\src\Application\ConversionReporter.Application.Contracts\ConversionReporter.Application.Contracts.csproj"/>
-        <ProjectReference Include="..\..\src\Infrastructure\ConversionReporter.Infrastructure.Persistence\ConversionReporter.Infrastructure.Persistence.csproj"/>
-        <ProjectReference Include="..\..\src\Infrastructure\ConversionReporter.Infrastructure.Caching\ConversionReporter.Infrastructure.Caching.csproj"/>
-        <ProjectReference Include="..\..\src\Infrastructure\ConversionReporter.Infrastructure.Messaging\ConversionReporter.Infrastructure.Messaging.csproj"/>
-        <ProjectReference Include="..\..\src\Presentation\ConversionReporter.Presentation.Grpc\ConversionReporter.Presentation.Grpc.csproj"/>
+        <ProjectReference Include="..\..\src\ConversionReporter\ConversionReporter.csproj"/>
     </ItemGroup>
 </Project>
