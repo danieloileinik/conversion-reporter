@@ -2,7 +2,7 @@ using ConversionReporter.Domain.Reports;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-namespace ConversionReporter.Infrastructure.Persistence.Configurations;
+namespace ConversionReporter.Features.Reports;
 
 public class ReportConfiguration : IEntityTypeConfiguration<Report>
 {
@@ -14,6 +14,7 @@ public class ReportConfiguration : IEntityTypeConfiguration<Report>
         builder.Property(r => r.StartDate).IsRequired();
         builder.Property(r => r.EndDate).IsRequired();
         builder.Property(r => r.Status).HasConversion<string>().HasMaxLength(50).IsRequired();
+        builder.Property(r => r.Version).IsConcurrencyToken();
         builder
             .Property(r => r.Ratio)
             .HasConversion<double?>(

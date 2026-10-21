@@ -22,7 +22,7 @@ public readonly record struct ConversionRatio
 
     public static ConversionRatio? Create(double value)
     {
-        if (value < 0) return null;
+        if (!double.IsFinite(value) || value < 0) return null;
         return new ConversionRatio(value);
     }
 }

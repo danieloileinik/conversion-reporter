@@ -17,6 +17,7 @@ public class CreateReportHandler(AppDbContext db) : IRequestHandler<CreateReport
             new OutboxMessage
             {
                 Type = "ReportCreated",
+                AggregateId = report.Id,
                 Payload = JsonSerializer.Serialize(
                     new ReportCreatedEvent(report.Id, report.ItemId, report.StartDate, report.EndDate))
             });

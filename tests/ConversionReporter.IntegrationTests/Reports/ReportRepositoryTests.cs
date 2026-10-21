@@ -9,18 +9,34 @@ namespace ConversionReporter.IntegrationTests.Reports;
 
 public class ReportRepositoryTests(IntegrationTestFixture fixture) : IntegrationTestBase(fixture)
 {
-    [Fact]
-    public async Task Add_AndGetById_ShouldPersistReport()
+    [Theory]
+    [InlineData(ReportStatus.Processing)]
+    [InlineData(ReportStatus.Done)]
+    [InlineData(ReportStatus.Canceled)]
+    public async Task Add_ThenReadInNewScope_ShouldRestoreAllFields(ReportStatus status)
     {
-        using var scope = Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        // Arrange
+        var start = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var report = new Report(Guid.NewGuid(), start, start.AddDays(1));
+        if (status is ReportStatus.Done or ReportStatus.Canceled) report.CountRatio(3, 2);
+        if (status is ReportStatus.Canceled) report.Cancel();
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.Reports.Add(report);
+            await db.SaveChangesAsync();
+        }
 
-        var report = new Report(Guid.NewGuid(), DateTime.UtcNow, DateTime.UtcNow.AddDays(1));
-        db.Reports.Add(report);
-        await db.SaveChangesAsync();
+        // Act
+        await using var readScope = Services.CreateAsyncScope();
+        var found = await readScope
+            .ServiceProvider
+            .GetRequiredService<AppDbContext>()
+            .Reports
+            .AsNoTracking()
+            .SingleAsync(r => r.Id == report.Id);
 
-        var found = await db.Reports.FirstOrDefaultAsync(r => r.Id == report.Id);
-        found.Should().NotBeNull();
-        found!.Status.Should().Be(ReportStatus.Processing);
+        // Assert
+        found.Should().BeEquivalentTo(report);
     }
 }

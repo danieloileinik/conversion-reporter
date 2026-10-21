@@ -15,6 +15,11 @@ public class OutboxConfiguration : IEntityTypeConfiguration<OutboxMessage>
         builder.Property(x => x.CreatedAt).IsRequired();
         builder.Property(x => x.ProcessedAt);
         builder.Property(x => x.Error).HasMaxLength(2048);
-        builder.HasIndex(x => x.ProcessedAt).HasFilter("processed_at IS NULL");
+        builder
+            .HasIndex(x => new { x.NextAttemptAt, x.CreatedAt, x.Id })
+            .HasFilter("processed_at IS NULL AND failed_at IS NULL");
+        builder
+            .HasIndex(x => new { x.AggregateId, x.CreatedAt, x.Id })
+            .HasFilter("processed_at IS NULL AND failed_at IS NULL");
     }
 }

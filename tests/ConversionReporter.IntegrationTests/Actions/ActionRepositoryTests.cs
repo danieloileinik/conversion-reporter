@@ -10,24 +10,33 @@ namespace ConversionReporter.IntegrationTests.Actions;
 
 public class ActionRepositoryTests(IntegrationTestFixture fixture) : IntegrationTestBase(fixture)
 {
-    [Fact]
-    public async Task Add_ShouldPersistAction()
+    [Theory]
+    [InlineData(ActionType.View)]
+    [InlineData(ActionType.Payment)]
+    public async Task Add_ThenReadInNewScope_ShouldRestoreAllFields(ActionType type)
     {
-        using var scope = Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        // Arrange
+        var action = new Action(Guid.NewGuid(), type)
+        {
+            CreatedAt = new DateTime(2026, 1, 1, 12, 30, 0, DateTimeKind.Utc)
+        };
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.Actions.Add(action);
+            await db.SaveChangesAsync();
+        }
 
-        var itemId = Guid.NewGuid();
-        db.Actions.Add(new Action(itemId, ActionType.View));
-        await db.SaveChangesAsync();
-
-        var actions = await db
+        // Act
+        await using var readScope = Services.CreateAsyncScope();
+        var found = await readScope
+            .ServiceProvider
+            .GetRequiredService<AppDbContext>()
             .Actions
-            .Where(a => a.ItemId == itemId
-                        && a.CreatedAt >= DateTime.UtcNow.AddHours(-1)
-                        && a.CreatedAt <= DateTime.UtcNow.AddHours(1))
-            .ToListAsync();
+            .AsNoTracking()
+            .SingleAsync(a => a.Id == action.Id);
 
-        actions.Should().HaveCount(1);
-        actions[0].Type.Should().Be(ActionType.View);
+        // Assert
+        found.Should().BeEquivalentTo(action);
     }
 }

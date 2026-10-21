@@ -21,17 +21,26 @@ public class Report(Guid id, Guid itemId, DateTime startDate, DateTime endDate)
 
     public ConversionRatio? Ratio { get; private set; }
 
+    public long Version { get; private set; } = 1;
+
     public ErrorOr<ConversionRatio> CountRatio(long viewCount, long paymentCount)
     {
+        if (Status == ReportStatus.Canceled)
+            return Error.Conflict("Report.Canceled", "Canceled reports cannot be calculated");
+        if (Status == ReportStatus.Done) return Ratio!.Value;
+
         var ratio = ConversionRatio.Create(viewCount, paymentCount);
         if (ratio.IsError) return ratio.Errors;
         Status = ReportStatus.Done;
         Ratio = ratio.Value;
+        Version++;
         return ratio;
     }
 
     public void Cancel()
     {
+        if (Status == ReportStatus.Canceled) return;
         Status = ReportStatus.Canceled;
+        Version++;
     }
 }

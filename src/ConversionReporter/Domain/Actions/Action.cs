@@ -6,5 +6,5 @@ public record Action(Guid Id, Guid ItemId, ActionType Type)
     {
     }
 
-    public DateTime CreatedAt { get; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
 }

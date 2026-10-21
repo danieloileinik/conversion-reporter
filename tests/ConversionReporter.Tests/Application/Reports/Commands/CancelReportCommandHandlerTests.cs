@@ -1,11 +1,9 @@
 using ConversionReporter.Domain.Reports;
-using ConversionReporter.Features.Reports;
 using ConversionReporter.Features.Reports.Commands.CancelReport;
 using ConversionReporter.Infrastructure.Persistence;
 using ErrorOr;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
-using NSubstitute;
 
 namespace ConversionReporter.Tests.Application.Reports.Commands;
 
@@ -23,7 +21,7 @@ public class CancelReportCommandHandlerTests
     public async Task Handle_WhenReportNotFound_ShouldReturnNotFoundError()
     {
         await using var db = CreateDb();
-        var result = await new CancelReportHandler(db, Substitute.For<IReportReadCache>())
+        var result = await new CancelReportHandler(db)
             .Handle(new CancelReportCommand(Guid.NewGuid()), CancellationToken.None);
 
         result.IsError.Should().BeTrue();
@@ -38,7 +36,7 @@ public class CancelReportCommandHandlerTests
         db.Reports.Add(report);
         await db.SaveChangesAsync();
 
-        var result = await new CancelReportHandler(db, Substitute.For<IReportReadCache>())
+        var result = await new CancelReportHandler(db)
             .Handle(new CancelReportCommand(report.Id), CancellationToken.None);
 
         result.IsError.Should().BeFalse();

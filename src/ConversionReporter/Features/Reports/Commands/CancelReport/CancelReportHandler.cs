@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ConversionReporter.Features.Reports.Commands.CancelReport;
 
-public class CancelReportHandler(AppDbContext db, IReportReadCache cache)
+public class CancelReportHandler(AppDbContext db)
     : IRequestHandler<CancelReportCommand, ErrorOr<Success>>
 {
     public async Task<ErrorOr<Success>> Handle(CancelReportCommand request, CancellationToken ct)
@@ -14,7 +14,6 @@ public class CancelReportHandler(AppDbContext db, IReportReadCache cache)
         if (report is null) return Error.NotFound("Report.NotFound", "Report not found");
 
         report.Cancel();
-        await cache.InvalidateAsync(report.Id, ct);
         return Result.Success;
     }
 }

@@ -35,6 +35,15 @@ public static class DependencyInjection
 
         services.AddSingleton<IKafkaConsumerFactory, KafkaConsumerFactory>();
         services.AddSingleton<IReportReadCache, ReportReadCache>();
+        services
+            .AddOptions<OutboxOptions>()
+            .Bind(configuration.GetSection("Outbox"))
+            .Validate(
+                o => o.BatchSize > 0 && o.MaxParallelism > 0 && o.PollInterval > TimeSpan.Zero
+                     && o.RetryDelay >= TimeSpan.Zero && o.MaxRetryDelay >= o.RetryDelay
+                     && o.MaxAttempts >= 0,
+                "Outbox options must specify valid batch, concurrency, and retry limits")
+            .ValidateOnStart();
 
         services.AddMediatR(cfg => cfg.RegisterServicesFromAssemblyContaining<AppDbContext>());
         services.AddValidatorsFromAssemblyContaining<AppDbContext>();

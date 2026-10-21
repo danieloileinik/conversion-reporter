@@ -13,7 +13,6 @@ namespace ConversionReporter.Infrastructure.Persistence.Migrations
     [DbContext(typeof(AppDbContext))]
     partial class AppDbContextModelSnapshot : ModelSnapshot
     {
-        /// <inheritdoc />
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
@@ -47,8 +46,8 @@ namespace ConversionReporter.Infrastructure.Persistence.Migrations
                     b.HasKey("Id")
                         .HasName("pk_actions");
 
-                    b.HasIndex("ItemId", "Type")
-                        .HasDatabaseName("ix_actions_item_id_type");
+                    b.HasIndex("ItemId", "CreatedAt")
+                        .HasDatabaseName("ix_actions_item_id_created_at");
 
                     b.ToTable("actions", (string)null);
                 });
@@ -82,6 +81,11 @@ namespace ConversionReporter.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(50)")
                         .HasColumnName("status");
 
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
                     b.HasKey("Id")
                         .HasName("pk_reports");
 
@@ -95,6 +99,14 @@ namespace ConversionReporter.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<Guid?>("AggregateId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("aggregate_id");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempt_count");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -103,6 +115,14 @@ namespace ConversionReporter.Infrastructure.Persistence.Migrations
                         .HasMaxLength(2048)
                         .HasColumnType("character varying(2048)")
                         .HasColumnName("error");
+
+                    b.Property<DateTime?>("FailedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("failed_at");
+
+                    b.Property<DateTime>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_attempt_at");
 
                     b.Property<string>("Payload")
                         .IsRequired()
@@ -122,9 +142,13 @@ namespace ConversionReporter.Infrastructure.Persistence.Migrations
                     b.HasKey("Id")
                         .HasName("pk_outbox_messages");
 
-                    b.HasIndex("ProcessedAt")
-                        .HasDatabaseName("ix_outbox_messages_processed_at")
-                        .HasFilter("processed_at IS NULL");
+                    b.HasIndex("AggregateId", "CreatedAt", "Id")
+                        .HasDatabaseName("ix_outbox_messages_aggregate_id_created_at_id")
+                        .HasFilter("processed_at IS NULL AND failed_at IS NULL");
+
+                    b.HasIndex("NextAttemptAt", "CreatedAt", "Id")
+                        .HasDatabaseName("ix_outbox_messages_next_attempt_at_created_at_id")
+                        .HasFilter("processed_at IS NULL AND failed_at IS NULL");
 
                     b.ToTable("outbox_messages", (string)null);
                 });
