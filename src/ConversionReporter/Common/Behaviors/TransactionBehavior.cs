@@ -13,10 +13,27 @@ public class TransactionBehavior<TRequest, TResponse>(AppDbContext db)
     {
         if (request is IQuery) return await next(ct);
 
-        var response = await next(ct);
-        if (response is IErrorOr { IsError: true }) return response;
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        TResponse response;
+        try
+        {
+            response = await next(ct);
+            if (response is IErrorOr { IsError: true })
+            {
+                await transaction.RollbackAsync(ct);
+                db.ChangeTracker.Clear();
+                return response;
+            }
 
-        await db.SaveChangesAsync(ct);
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+        }
+        catch
+        {
+            db.ChangeTracker.Clear();
+            throw;
+        }
+
         return response;
     }
 }

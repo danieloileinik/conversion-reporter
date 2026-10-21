@@ -45,7 +45,12 @@ public class IntegrationTestFixture : IAsyncLifetime
         services.AddSingleton<IKafkaConsumerFactory>(sp =>
             new TestKafkaConsumerFactory(sp.GetRequiredService<IConfiguration>()));
 
-        Services = services.BuildServiceProvider();
+        Services = services.BuildServiceProvider(
+            new ServiceProviderOptions
+            {
+                ValidateScopes = true,
+                ValidateOnBuild = true
+            });
 
         using var scope = Services.CreateScope();
         await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.MigrateAsync();
@@ -88,6 +93,7 @@ public class IntegrationTestFixture : IAsyncLifetime
         await db.Actions.ExecuteDeleteAsync();
         await db.Reports.ExecuteDeleteAsync();
         await db.OutboxMessages.ExecuteDeleteAsync();
+        await db.ProcessedCommands.ExecuteDeleteAsync();
 
         var redis = Services.GetRequiredService<IConnectionMultiplexer>();
         foreach (var ep in redis.GetEndPoints())

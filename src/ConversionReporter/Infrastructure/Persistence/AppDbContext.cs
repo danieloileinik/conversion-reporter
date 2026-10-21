@@ -10,6 +10,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Action> Actions => Set<Action>();
     public DbSet<Report> Reports => Set<Report>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+    public DbSet<ProcessedCommand> ProcessedCommands => Set<ProcessedCommand>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

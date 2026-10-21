@@ -35,14 +35,13 @@ public static class DependencyInjection
 
         services.AddSingleton<IKafkaConsumerFactory, KafkaConsumerFactory>();
         services.AddSingleton<IReportReadCache, ReportReadCache>();
-        services.AddScoped<IIdempotencyCache, IdempotencyCache>();
 
         services.AddMediatR(cfg => cfg.RegisterServicesFromAssemblyContaining<AppDbContext>());
         services.AddValidatorsFromAssemblyContaining<AppDbContext>();
 
         services.AddScoped(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
-        services.AddScoped(typeof(IPipelineBehavior<,>), typeof(IdempotencyBehavior<,>));
         services.AddScoped(typeof(IPipelineBehavior<,>), typeof(TransactionBehavior<,>));
+        services.AddScoped(typeof(IPipelineBehavior<,>), typeof(IdempotencyBehavior<,>));
 
         services.AddHostedService<OutboxWorker>();
         services.AddHostedService<CreateReportConsumer>();

@@ -17,16 +17,14 @@ public class RegisterActionConsumerTests(IntegrationTestFixture fixture) : Integ
     [Fact]
     public async Task Consume_ValidMessage_ShouldPersistAction()
     {
+        // Arrange
         var itemId = Guid.NewGuid();
         var producer = Services.GetRequiredService<IProducer<string, string>>();
-        var consumer = new RegisterActionConsumer(
+        using var consumer = new RegisterActionConsumer(
             Services.GetRequiredService<IKafkaConsumerFactory>(),
             Services.GetRequiredService<IServiceScopeFactory>(),
+            producer,
             Services.GetRequiredService<ILogger<RegisterActionConsumer>>());
-
-        using var cts = new CancellationTokenSource();
-        await consumer.StartAsync(cts.Token);
-        await Task.Delay(2000, cts.Token);
 
         await producer.ProduceAsync(
             "actions",
@@ -36,10 +34,23 @@ public class RegisterActionConsumerTests(IntegrationTestFixture fixture) : Integ
                 Value = JsonSerializer.Serialize(new RegisterActionCommand(itemId, ActionType.View, Guid.NewGuid()))
             });
 
-        await Task.Delay(5000, cts.Token);
-        await consumer.StopAsync(CancellationToken.None);
-        consumer.Dispose();
+        // Act
+        await consumer.StartAsync(CancellationToken.None);
+        try
+        {
+            await WaitUntilAsync(async () =>
+            {
+                await using var pollScope = Services.CreateAsyncScope();
+                var verifyDb = pollScope.ServiceProvider.GetRequiredService<AppDbContext>();
+                return await verifyDb.Actions.AnyAsync(a => a.ItemId == itemId);
+            });
+        }
+        finally
+        {
+            await consumer.StopAsync(CancellationToken.None);
+        }
 
+        // Assert
         using var scope = Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var actions = await db

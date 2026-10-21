@@ -16,10 +16,12 @@ public class CreateReportConsumerTests(IntegrationTestFixture fixture) : Integra
     [Fact]
     public async Task Consume_ValidMessage_ShouldCreateReport()
     {
+        // Arrange
         var producer = Services.GetRequiredService<IProducer<string, string>>();
-        var consumer = new CreateReportConsumer(
+        using var consumer = new CreateReportConsumer(
             Services.GetRequiredService<IKafkaConsumerFactory>(),
             Services.GetRequiredService<IServiceScopeFactory>(),
+            producer,
             Services.GetRequiredService<ILogger<CreateReportConsumer>>());
 
         var itemId = Guid.NewGuid();
@@ -28,14 +30,28 @@ public class CreateReportConsumerTests(IntegrationTestFixture fixture) : Integra
             "reports.create",
             new Message<string, string> { Key = itemId.ToString(), Value = JsonSerializer.Serialize(command) });
 
-        using var cts = new CancellationTokenSource();
-        await consumer.StartAsync(cts.Token);
-        await Task.Delay(3000, cts.Token);
-        await consumer.StopAsync(CancellationToken.None);
+        // Act
+        await consumer.StartAsync(CancellationToken.None);
+        try
+        {
+            await WaitUntilAsync(async () =>
+            {
+                await using var pollScope = Services.CreateAsyncScope();
+                var verifyDb = pollScope.ServiceProvider.GetRequiredService<AppDbContext>();
+                return await verifyDb.Reports.AnyAsync(r => r.ItemId == itemId);
+            });
+        }
+        finally
+        {
+            await consumer.StopAsync(CancellationToken.None);
+        }
 
+        // Assert
         using var scope = Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var count = await db.Reports.CountAsync();
-        count.Should().BeGreaterThanOrEqualTo(1);
+        var reports = await db.Reports.AsNoTracking().Where(r => r.ItemId == itemId).ToListAsync();
+        var report = reports.Should().ContainSingle().Subject;
+        report.StartDate.Should().BeCloseTo(command.StartDate, TimeSpan.FromMicroseconds(1));
+        report.EndDate.Should().BeCloseTo(command.EndDate, TimeSpan.FromMicroseconds(1));
     }
 }

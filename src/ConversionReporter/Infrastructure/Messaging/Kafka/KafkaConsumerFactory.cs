@@ -13,7 +13,8 @@ public class KafkaConsumerFactory(IConfiguration configuration) : IKafkaConsumer
                 BootstrapServers = configuration["Kafka:BootstrapServers"],
                 GroupId = configuration["Kafka:GroupId"],
                 AutoOffsetReset = AutoOffsetReset.Earliest,
-                EnableAutoCommit = false
+                EnableAutoCommit = false,
+                EnableAutoOffsetStore = false
             }).Build();
     }
 }
