@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0.402 AS build
 WORKDIR /app
 
 RUN dotnet tool install --global dotnet-ef
@@ -21,7 +21,7 @@ RUN dotnet ef migrations bundle \
 WORKDIR /app/src/ConversionReporter
 RUN dotnet publish ConversionReporter.csproj -c Release -o /app/publish
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.13
 WORKDIR /app
 
 COPY --from=build /app/publish .

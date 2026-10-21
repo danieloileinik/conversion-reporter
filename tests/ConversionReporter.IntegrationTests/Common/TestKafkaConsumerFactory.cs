@@ -15,6 +15,7 @@ internal sealed class TestKafkaConsumerFactory(IConfiguration configuration) : I
                 GroupId = $"test-{Guid.NewGuid():N}",
                 AutoOffsetReset = AutoOffsetReset.Earliest,
                 EnableAutoCommit = false,
+                EnableAutoOffsetStore = false,
                 AllowAutoCreateTopics = true
             }).Build();
     }

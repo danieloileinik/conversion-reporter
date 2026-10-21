@@ -14,4 +14,11 @@ public abstract class IntegrationTestBase(IntegrationTestFixture fixture) : IAsy
     {
         return Task.CompletedTask;
     }
+
+    protected static async Task WaitUntilAsync(Func<Task<bool>> condition)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        while (!await condition())
+            await Task.Delay(50, timeout.Token);
+    }
 }
