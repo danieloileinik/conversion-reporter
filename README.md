@@ -16,7 +16,7 @@ docker compose run --rm --no-deps --publish 5177:8080 \
   --env ASPNETCORE_URLS=http://+:8080 conversionreporter
 ```
 
-The last command starts the application in the foreground and exposes gRPC at `localhost:5177`. Migrations run through `efbundle`; starting the application alone does not apply them. For an existing database, read [Upgrading](#upgrading) first.
+The last command starts the application in the foreground and exposes gRPC at `localhost:5177`. Migrations run through `efbundle`; starting the application alone does not apply them.
 
 The supplied environment values target the Compose network: `postgres`, `redis`, and `kafka` are container hostnames. Kafka advertises `kafka:9092`, so the examples below run Kafka tools inside its container. Running the application on the host requires host-specific connection strings and a Kafka listener advertised to the host. Compose reads `.env.local`; `dotnet run` does not load it automatically.
 
