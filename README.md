@@ -139,17 +139,3 @@ dotnet test tests/ConversionReporter.IntegrationTests
 ```
 
 Integration tests share one PostgreSQL, Redis, and KRaft Kafka fixture. Each test clears database/cache state and truncates Kafka topic records. The suite covers concurrent commands, rollback and replay, cache races, outbox claims/retries, period boundaries, and gRPC calls through the generated client.
-
-## Upgrading
-
-1. Stop old application replicas before applying migrations: older writers do not maintain report versions.
-2. Apply migrations using the `efbundle` command from [Run locally](#run-locally), then start the updated service.
-3. Account for these changes when upgrading an existing installation:
-
-| Change | Required action |
-| --- | --- |
-| `DurableIdempotency` | Old Redis keys cannot reconstruct saved command results. Coordinate the cutover before replaying previously processed commands. |
-| `ReportConcurrencyAndOutboxDelivery` | Adds report versions, outbox retry fields, and indexes; fills report keys in recognizable legacy outbox payloads. |
-| PostgreSQL 16 → 18 | Migrate data with dump/restore or `pg_upgrade` before switching images. See the [PostgreSQL upgrade guide](https://www.postgresql.org/docs/18/upgrading.html). |
-
-Compose mounts PostgreSQL storage at `/var/lib/postgresql` for its versioned data layout. Keep existing data volumes during migration.
