@@ -1,182 +1,155 @@
 # ConversionReporter
 
-A scalable microservice that processes user actions (views/payments) and calculates conversion rates for e-commerce.
+A .NET 10 service that records views and payments, calculates report ratios in PostgreSQL, and exposes reports over gRPC. Commands arrive through Kafka; Redis caches report snapshots.
 
-## Architecture
+## Run locally
 
-Vertical Slice Architecture — each feature is a self-contained slice owning its command/query, handler, validator, and transport entry point. Cross-cutting concerns live in `Common/`.
-
-```
-src/
-└── ConversionReporter/
-    ├── Common/
-    │   ├── Abstractions/
-    │   └── Behaviors/
-    ├── Domain/
-    │   ├── Actions/
-    │   └── Reports/
-    ├── Features/
-    │   ├── Actions/
-    │   │   └── Commands/
-    │   │       └── RegisterAction/
-    │   └── Reports/
-    │       ├── Commands/
-    │       │   ├── CancelReport/
-    │       │   ├── CountRatio/
-    │       │   └── CreateReport/
-    │       └── Queries/
-    │           └── GetReport/
-    └── Infrastructure/
-        ├── Caching/
-        ├── Messaging/
-        │   ├── Kafka/
-        │   └── Outbox/
-        └── Persistence/
-            └── Configurations/
-```
-
-### CQRS
-
-Commands and queries are dispatched through MediatR:
-
-- **Commands** (`RegisterActionCommand`, `CreateReportCommand`, `CountRatioCommand`, `CancelReportCommand`) mutate state, return `ErrorOr<Success>` or a typed response, and flow through Kafka topics.
-- **Queries** (`GetReportQuery`) implement the `IQuery` marker, bypass the transactional pipeline, and read from a Redis-backed cache before falling through to Postgres.
-
-MediatR pipeline order:
-
-1. `ValidationBehavior` — FluentValidation, throws on failure.
-2. `IdempotencyBehavior` — short-circuits duplicate `IIdempotentCommand` requests via Redis key.
-3. `TransactionBehavior` — skips queries, commits via `SaveChangesAsync` only on non-error result.
-
-Write paths persist domain changes and outbox messages in the same EF Core transaction. `OutboxWorker` polls `outbox_messages` every 5 seconds and publishes to Kafka.
-
-### Slice structure
-
-```
-Features/Reports/Commands/CreateReport/
-    CreateReportCommand.cs
-    CreateReportHandler.cs
-    CreateReportValidator.cs
-    CreateReportConsumer.cs
-    CreateReportResponse.cs
-```
-
-EF Core configurations live in `Infrastructure/Persistence/Configurations/` — pure persistence mapping, no business logic.
-
-### Reliability patterns
-
-| Concern            | Mechanism                                                       |
-|--------------------|-----------------------------------------------------------------|
-| Duplicate commands | Redis idempotency keys, 7-day TTL                               |
-| Event publishing   | Transactional Outbox + dedicated worker                         |
-| Read latency       | Redis read-through cache, invalidated on `Cancel`               |
-| Consumer offsets   | `EnableAutoCommit = false`, manual commit after handler success |
-
-## Tech stack
-
-| Layer          | Technology                                           |
-|----------------|------------------------------------------------------|
-| Runtime        | .NET 10                                              |
-| Language       | C# 14                                                |
-| API            | gRPC (`Grpc.AspNetCore` 2.64)                        |
-| Mediator       | MediatR 12                                           |
-| Validation     | FluentValidation 11                                  |
-| Result type    | ErrorOr 2.0                                          |
-| Database       | PostgreSQL via EF Core 10 + Npgsql                   |
-| Cache          | Redis via `StackExchange.Redis` 3.0                  |
-| Message broker | Apache Kafka via `Confluent.Kafka` 2.14              |
-| Testing        | xUnit, NSubstitute, FluentAssertions, Testcontainers |
-
-## Domain flow
-
-```
-Kafka: actions              ──▶ RegisterActionConsumer ──▶ RegisterActionHandler
-Kafka: reports.create       ──▶ CreateReportConsumer   ──▶ CreateReportHandler
-Kafka: reports.count-ratio  ──▶ CountRatioConsumer     ──▶ CountRatioHandler
-Kafka: reports.cancel       ──▶ CancelReportConsumer   ──▶ CancelReportHandler
-
-gRPC:  Report/GetReport    ──▶ GetReportHandler       ──▶ Redis | Postgres
-```
-
-## Running locally
-
-Prerequisites: .NET 10 SDK, Docker.
+Requirements: Docker with Compose. Run these commands from the repository root:
 
 ```bash
-docker compose up -d postgres redis kafka
-
-dotnet ef database update --project src/ConversionReporter
-
-dotnet run --project src/ConversionReporter
+cp .env.example .env.local
+# Review .env.local before starting the services.
+docker compose up -d --wait postgres redis kafka
+docker compose build conversionreporter
+docker compose run --rm --no-deps --entrypoint ./efbundle conversionreporter
+docker compose run --rm --no-deps --publish 5177:8080 \
+  --env ASPNETCORE_URLS=http://+:8080 conversionreporter
 ```
 
-`appsettings.json`:
+The last command starts the application in the foreground and exposes gRPC at `localhost:5177`. Migrations run through `efbundle`; starting the application alone does not apply them. For an existing database, read [Upgrading](#upgrading) first.
 
-```json
-{
-  "ConnectionStrings": {
-    "Postgres": "Host=localhost;Database=conversion_reporter;Username=postgres;Password=postgres",
-    "Redis": "localhost:6379"
-  },
-  "Kafka": {
-    "BootstrapServers": "localhost:9092",
-    "GroupId": "conversion-reporter"
-  }
-}
+The supplied environment values target the Compose network: `postgres`, `redis`, and `kafka` are container hostnames. Kafka advertises `kafka:9092`, so the examples below run Kafka tools inside its container. Running the application on the host requires host-specific connection strings and a Kafka listener advertised to the host. Compose reads `.env.local`; `dotnet run` does not load it automatically.
+
+## Report behavior
+
+- The ratio is **views / payments**: 100 views and 10 payments produce `10.0`.
+- Actions use their registration time in UTC. The report includes actions for its item between `StartDate` and `EndDate`, including both boundaries.
+- Creating a report sets `Processing`. Send a separate calculation command to complete it; there is no built-in scheduler.
+- Calculation requires at least one payment. Otherwise it returns a retryable error and leaves the report unchanged.
+- Successful calculation sets `Done`. Repeating it preserves the original ratio and produces no additional event. Create a new report for a new calculation.
+- Cancellation sets `Canceled` and is terminal. It can cancel a completed report while preserving its ratio. Repeated cancellation has no further effect.
+
+## Kafka interface
+
+### Commands
+
+Send JSON objects with these fields. IDs must be nonempty GUIDs; dates must be UTC timestamps, with `StartDate < EndDate`.
+
+| Topic | Fields |
+| --- | --- |
+| `actions` | `ItemId`, `ActionType` (`View` or `Payment`), `IdempotencyKey` |
+| `reports.create` | `ItemId`, `StartDate`, `EndDate`, `IdempotencyKey` |
+| `reports.count-ratio` | `ReportId`, `IdempotencyKey` |
+| `reports.cancel` | `ReportId` |
+
+For example, register a view:
+
+```bash
+printf '%s\n' '{"ItemId":"8a1b3c4d-5e6f-7081-92a3-b4c5d6e7f809","ActionType":"View","IdempotencyKey":"f1e2d3c4-b5a6-9788-6655-443322110099"}' \
+  | docker compose exec -T kafka kafka-console-producer \
+      --bootstrap-server kafka:9092 --topic actions
 ```
 
-## gRPC API
+Reuse an idempotency key only when retrying the same command. A new action or report needs a new key. Successful results are stored by command type and key in `processed_commands`; replaying a successful command emits no additional event. Failed results do not reserve a key.
 
-```proto
-syntax = "proto3";
+### Events
 
-package report;
-option csharp_namespace = "ConversionReporter.Grpc";
+| Topic | JSON fields |
+| --- | --- |
+| `ReportCreated` | `Id`, `ItemId`, `StartDate`, `EndDate` |
+| `RatioCounted` | `ReportId`, `Ratio` |
 
-service Report {
-    rpc GetReport (GetReportRequest) returns (GetReportResponse);
-}
+Use the ID from `ReportCreated` for calculation, cancellation, and gRPC reads. To inspect creation events:
 
-message GetReportRequest { string report_id = 1; }
-
-message GetReportResponse {
-    string id = 1;
-    string item_id = 2;
-    string start_date = 3;
-    string end_date = 4;
-    string status = 5;
-    double ratio = 6;
-}
+```bash
+docker compose exec kafka kafka-console-consumer \
+  --bootstrap-server kafka:9092 --topic ReportCreated --from-beginning
 ```
 
-Status codes: `OK`, `INVALID_ARGUMENT` (bad GUID), `NOT_FOUND`.
+Event keys contain the report ID. The `event-id` header contains the stable outbox message ID. Delivery is **at least once**: consumers must deduplicate that ID. Publication follows report order; consumers of different topics can observe events in a different order.
+
+### Failures and retries
+
+| Outcome | Consumer behavior |
+| --- | --- |
+| Success | Commit the source offset after processing |
+| Invalid JSON, validation failure, or terminal conflict | Publish to `<source-topic>.dead-letter`, then commit |
+| Other business errors, database failures, or failed delivery | Retry from the same offset |
+
+A failed command holds up later messages in its partition. There is no command retry limit. Dead-letter messages include `Topic`, `Partition`, `Offset`, `Payload`, and `Error`; if dead-letter delivery fails, the source offset remains uncommitted.
+
+## gRPC interface
+
+The [Protobuf contract](src/ConversionReporter.Contracts.Grpc/report.proto) defines `report.Report/GetReport`. Server reflection is not enabled, so pass the contract to [grpcurl](https://github.com/fullstorydev/grpcurl):
 
 ```bash
 grpcurl -plaintext \
-    -d '{"report_id": "5f4e8b1a-9c3d-4a7e-b8f2-1d6c5e9a0b3f"}' \
-    localhost:5001 \
-    report.Report/GetReport
+  -import-path src/ConversionReporter.Contracts.Grpc \
+  -proto report.proto \
+  -d '{"report_id":"<report-id>"}' \
+  localhost:5177 report.Report/GetReport
 ```
 
-## Kafka commands
+Replace `<report-id>` with an ID from `ReportCreated`. The response contains `id`, `item_id`, UTC `start_date` and `end_date`, `status`, and `ratio`. An uncalculated ratio is returned as `0`; use `status` to distinguish it from a calculated zero.
 
-| Topic                 | Command                 | Payload fields                                                  |
-|-----------------------|-------------------------|-----------------------------------------------------------------|
-| `actions`             | `RegisterActionCommand` | `ItemId`, `ActionType` (`View` \| `Payment`), `IdempotencyKey` |
-| `reports.create`      | `CreateReportCommand`   | `ItemId`, `StartDate`, `EndDate`, `IdempotencyKey`              |
-| `reports.count-ratio` | `CountRatioCommand`     | `ReportId`, `IdempotencyKey`                                    |
-| `reports.cancel`      | `CancelReportCommand`   | `ReportId`                                                      |
+Expected status codes: `OK`, `INVALID_ARGUMENT` for a malformed GUID, and `NOT_FOUND` for an unknown report.
 
-```bash
-echo '{"ItemId":"8a1b3c4d-5e6f-7081-92a3-b4c5d6e7f809","ActionType":"View","IdempotencyKey":"f1e2d3c4-b5a6-9788-6655-443322110099"}' \
-  | kafka-console-producer --bootstrap-server localhost:9092 --topic actions
-```
+## Architecture and consistency
 
-## Testing
+Features use vertical slices: each command or query keeps its handler, validation, and transport entry point together. Shared concerns live in `Common/`; persistence, caching, and messaging live in `Infrastructure/`.
+
+| Location | Purpose |
+| --- | --- |
+| [Features](src/ConversionReporter/Features) | Action registration, report commands, and report reads |
+| [Domain](src/ConversionReporter/Domain) | Report state transitions and ratio rules |
+| [Common](src/ConversionReporter/Common) | MediatR validation, transaction, and idempotency behaviors |
+| [Infrastructure](src/ConversionReporter/Infrastructure) | EF Core mappings/migrations, Redis, Kafka, and outbox |
+| [Contracts](src/ConversionReporter.Contracts.Events) | Published event payloads |
+
+The command pipeline runs **validation → transaction → idempotency → handler**. PostgreSQL advisory locks serialize duplicate keys; business changes, saved command results, and outbox records commit together. Report versions detect concurrent updates. Kafka retries concurrency failures against current state.
+
+Reads check the report version in PostgreSQL before using a matching Redis snapshot. A delayed cache fill cannot replace a newer version. Each cache entry expires after one hour; reads still require PostgreSQL and Redis availability.
+
+Outbox workers claim rows with `FOR UPDATE SKIP LOCKED` and publish independent reports in parallel. An earlier retryable event blocks later events for the same report. Failed deliveries use exponential backoff; successful retries clear the error. Ready batches drain without a polling pause. Automatic cleanup of processed outbox records and idempotency records is not implemented.
+
+## Configuration
+
+Connection settings are shown in [.env.example](.env.example); image tags and local infrastructure settings live in [docker-compose.yml](docker-compose.yml). Package versions are defined in the project files.
+
+Optional settings under `Outbox`:
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `BatchSize` | `100` | Maximum records claimed per batch |
+| `MaxParallelism` | `8` | Concurrent publications per worker |
+| `PollInterval` | `00:00:01` | Delay when no records are ready or a batch fails |
+| `RetryDelay` | `00:00:01` | Initial delivery retry delay |
+| `MaxRetryDelay` | `00:05:00` | Maximum delivery retry delay |
+| `MaxAttempts` | `0` | Unlimited retries; a positive value enables quarantine |
+
+Environment variables use double underscores, for example `Outbox__BatchSize=200`. With a positive attempt limit, exhausted records stay in `outbox_messages` with `failed_at` set and stop blocking later events. After fixing delivery, replay a selected unprocessed record by setting `failed_at = NULL`, `attempt_count = 0`, and `next_attempt_at = now()`. There is no replay API.
+
+## Tests
+
+Requires the .NET 10 SDK; integration tests also require Docker.
 
 ```bash
 dotnet test tests/ConversionReporter.Tests
 dotnet test tests/ConversionReporter.IntegrationTests
 ```
 
-Integration tests spin up Postgres, Redis, and Kafka via Testcontainers.
+Integration tests share one PostgreSQL, Redis, and KRaft Kafka fixture. Each test clears database/cache state and truncates Kafka topic records. The suite covers concurrent commands, rollback and replay, cache races, outbox claims/retries, period boundaries, and gRPC calls through the generated client.
+
+## Upgrading
+
+1. Stop old application replicas before applying migrations: older writers do not maintain report versions.
+2. Apply migrations using the `efbundle` command from [Run locally](#run-locally), then start the updated service.
+3. Account for these changes when upgrading an existing installation:
+
+| Change | Required action |
+| --- | --- |
+| `DurableIdempotency` | Old Redis keys cannot reconstruct saved command results. Coordinate the cutover before replaying previously processed commands. |
+| `ReportConcurrencyAndOutboxDelivery` | Adds report versions, outbox retry fields, and indexes; fills report keys in recognizable legacy outbox payloads. |
+| PostgreSQL 16 → 18 | Migrate data with dump/restore or `pg_upgrade` before switching images. See the [PostgreSQL upgrade guide](https://www.postgresql.org/docs/18/upgrading.html). |
+
+Compose mounts PostgreSQL storage at `/var/lib/postgresql` for its versioned data layout. Keep existing data volumes during migration.
