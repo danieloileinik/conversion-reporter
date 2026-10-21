@@ -4,7 +4,7 @@ option csharp_namespace = "ConversionReporter.Grpc";
 
 package report;
 
-service Reports {
+service Report {
   rpc GetReport (GetReportRequest) returns (GetReportResponse);
 }
 

@@ -1,3 +1,4 @@
+using ConversionReporter.Grpc;
 using Grpc.Core;
 using MediatR;
 using GrpcGetReportRequest = ConversionReporter.Grpc.GetReportRequest;
@@ -5,7 +6,7 @@ using GrpcGetReportResponse = ConversionReporter.Grpc.GetReportResponse;
 
 namespace ConversionReporter.Features.Reports.Queries.GetReport;
 
-public class ReportService(IMediator mediator) : Grpc.Reports.ReportsBase
+public class ReportService(IMediator mediator) : Report.ReportBase
 {
     public override async Task<GrpcGetReportResponse> GetReport(
         GrpcGetReportRequest request,

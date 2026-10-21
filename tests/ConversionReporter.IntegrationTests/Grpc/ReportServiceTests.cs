@@ -1,80 +1,88 @@
 using ConversionReporter.Domain.Reports;
-using ConversionReporter.Features.Reports.Commands.CreateReport;
-using ConversionReporter.Features.Reports.Queries.GetReport;
+using ConversionReporter.Grpc;
+using ConversionReporter.Infrastructure.Persistence;
 using ConversionReporter.IntegrationTests.Common;
 using FluentAssertions;
 using Grpc.Core;
-using MediatR;
+using Grpc.Net.Client;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using GrpcGetReportRequest = ConversionReporter.Grpc.GetReportRequest;
+using Microsoft.Extensions.Hosting;
+using DomainReport = ConversionReporter.Domain.Reports.Report;
+using GrpcReportService = ConversionReporter.Grpc.Report;
 
 namespace ConversionReporter.IntegrationTests.Grpc;
 
 public class ReportServiceTests(IntegrationTestFixture fixture) : IntegrationTestBase(fixture)
 {
     [Fact]
-    public async Task GetReport_WhenReportExists_ShouldReturnReport()
+    public async Task GetReport_ThroughGrpcClient_ShouldReturnPersistedReport()
     {
-        var mediator = Services.GetRequiredService<IMediator>();
-        var service = new ReportService(mediator);
-        var command = new CreateReportCommand(
-            Guid.NewGuid(),
-            DateTime.UtcNow,
-            DateTime.UtcNow.AddDays(1),
-            Guid.NewGuid());
-        var reportId = await mediator.Send(command);
-        var response = await service.GetReport(
-            new GrpcGetReportRequest { ReportId = reportId.Id.ToString() },
-            new TestServerCallContext());
-        response.Should().NotBeNull();
-        response.Id.Should().Be(reportId.Id.ToString());
-        response.Status.Should().Be(nameof(ReportStatus.Processing));
+        // Arrange
+        var start = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var report = new DomainReport(Guid.NewGuid(), start, start.AddDays(1));
+        report.CountRatio(3, 2);
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.Reports.Add(report);
+            await db.SaveChangesAsync();
+        }
+
+        await using var factory = new ApplicationFactory(Services.GetRequiredService<IConfiguration>());
+        using var channel = GrpcChannel.ForAddress(
+            "http://localhost",
+            new GrpcChannelOptions { HttpClient = factory.CreateClient() });
+        var client = new GrpcReportService.ReportClient(channel);
+
+        // Act
+        var response = await client.GetReportAsync(new GetReportRequest { ReportId = report.Id.ToString() });
+
+        // Assert
+        response.Id.Should().Be(report.Id.ToString());
+        response.ItemId.Should().Be(report.ItemId.ToString());
+        response.StartDate.Should().Be(report.StartDate.ToString("O"));
+        response.EndDate.Should().Be(report.EndDate.ToString("O"));
+        response.Status.Should().Be(nameof(ReportStatus.Done));
+        response.Ratio.Should().Be(1.5);
     }
 
-    [Fact]
-    public async Task GetReport_WhenReportNotFound_ShouldThrowRpcException()
+    [Theory]
+    [InlineData(false, StatusCode.NotFound)]
+    [InlineData(true, StatusCode.InvalidArgument)]
+    public async Task GetReport_ThroughGrpcClient_ShouldReturnExpectedStatus(bool invalid, StatusCode expected)
     {
-        var service = new ReportService(Services.GetRequiredService<IMediator>());
-        var act = () => service.GetReport(
-            new GrpcGetReportRequest { ReportId = Guid.NewGuid().ToString() },
-            new TestServerCallContext());
-        await act.Should().ThrowAsync<RpcException>().Where(ex => ex.StatusCode == StatusCode.NotFound);
+        // Arrange
+        await using var factory = new ApplicationFactory(Services.GetRequiredService<IConfiguration>());
+        using var channel = GrpcChannel.ForAddress(
+            "http://localhost",
+            new GrpcChannelOptions { HttpClient = factory.CreateClient() });
+        var client = new GrpcReportService.ReportClient(channel);
+        var request = new GetReportRequest { ReportId = invalid ? "invalid-guid" : Guid.NewGuid().ToString() };
+
+        // Act
+        var act = async () => await client.GetReportAsync(request);
+
+        // Assert
+        await act.Should().ThrowAsync<RpcException>().Where(ex => ex.StatusCode == expected);
     }
 
-    [Fact]
-    public async Task GetReport_WhenInvalidId_ShouldThrowRpcException()
+    private sealed class ApplicationFactory(IConfiguration configuration) : WebApplicationFactory<Program>
     {
-        var service = new ReportService(Services.GetRequiredService<IMediator>());
-        var act = () => service.GetReport(
-            new GrpcGetReportRequest { ReportId = "invalid-guid" },
-            new TestServerCallContext());
-        await act.Should().ThrowAsync<RpcException>().Where(ex => ex.StatusCode == StatusCode.InvalidArgument);
-    }
-}
-
-public class TestServerCallContext : ServerCallContext
-{
-    protected override string MethodCore => "TestMethod";
-    protected override string HostCore => "TestHost";
-    protected override string PeerCore => "TestPeer";
-    protected override DateTime DeadlineCore => DateTime.UtcNow.AddMinutes(1);
-    protected override Metadata RequestHeadersCore { get; } = new();
-    protected override CancellationToken CancellationTokenCore => CancellationToken.None;
-    protected override Metadata ResponseTrailersCore { get; } = new();
-    protected override Status StatusCore { get; set; }
-    protected override WriteOptions? WriteOptionsCore { get; set; }
-
-    protected override AuthContext AuthContextCore { get; } = new(
-        string.Empty,
-        new Dictionary<string, List<AuthProperty>>());
-
-    protected override ContextPropagationToken CreatePropagationTokenCore(ContextPropagationOptions? options)
-    {
-        throw new NotImplementedException();
-    }
-
-    protected override Task WriteResponseHeadersAsyncCore(Metadata responseHeaders)
-    {
-        return Task.CompletedTask;
+        protected override void ConfigureWebHost(IWebHostBuilder builder)
+        {
+            builder.ConfigureAppConfiguration((_, config) => config.AddConfiguration(configuration));
+            builder.ConfigureTestServices(services =>
+            {
+                foreach (var descriptor in services
+                             .Where(d => d.ServiceType == typeof(IHostedService)
+                                         && d.ImplementationType?.Assembly == typeof(AppDbContext).Assembly)
+                             .ToArray())
+                    services.Remove(descriptor);
+            });
+        }
     }
 }

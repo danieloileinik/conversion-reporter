@@ -95,7 +95,7 @@ Kafka: reports.create       ──▶ CreateReportConsumer   ──▶ CreateRep
 Kafka: reports.count-ratio  ──▶ CountRatioConsumer     ──▶ CountRatioHandler
 Kafka: reports.cancel       ──▶ CancelReportConsumer   ──▶ CancelReportHandler
 
-gRPC:  Reports/GetReport    ──▶ GetReportHandler       ──▶ Redis | Postgres
+gRPC:  Report/GetReport    ──▶ GetReportHandler       ──▶ Redis | Postgres
 ```
 
 ## Running locally
@@ -133,7 +133,7 @@ syntax = "proto3";
 package report;
 option csharp_namespace = "ConversionReporter.Grpc";
 
-service Reports {
+service Report {
     rpc GetReport (GetReportRequest) returns (GetReportResponse);
 }
 
@@ -155,7 +155,7 @@ Status codes: `OK`, `INVALID_ARGUMENT` (bad GUID), `NOT_FOUND`.
 grpcurl -plaintext \
     -d '{"report_id": "5f4e8b1a-9c3d-4a7e-b8f2-1d6c5e9a0b3f"}' \
     localhost:5001 \
-    report.Reports/GetReport
+    report.Report/GetReport
 ```
 
 ## Kafka commands
