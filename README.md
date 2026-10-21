@@ -2,6 +2,15 @@
 
 A .NET 10 service that records views and payments, calculates report ratios in PostgreSQL, and exposes reports over gRPC. Commands arrive through Kafka; Redis caches report snapshots.
 
+## Report behavior
+
+- The ratio is **views / payments**: 100 views and 10 payments produce `10.0`.
+- Actions use their registration time in UTC. The report includes actions for its item between `StartDate` and `EndDate`, including both boundaries.
+- Creating a report sets `Processing`. Send a separate calculation command to complete it; there is no built-in scheduler.
+- Calculation requires at least one payment. Otherwise it returns a retryable error and leaves the report unchanged. The Kafka consumer retries without a limit, delaying later commands in the same partition until a payment in the report period is registered.
+- Successful calculation sets `Done`. Repeating it preserves the original ratio and produces no additional event. Create a new report for a new calculation.
+- Cancellation sets `Canceled` and is terminal. It can cancel a completed report while preserving its ratio. Repeated cancellation has no further effect. Calculating a canceled report sends the command to dead-letter.
+
 ## Run locally
 
 Requirements: Docker with Compose. Run these commands from the repository root:
@@ -20,14 +29,58 @@ The last command starts the application in the foreground and exposes gRPC at `l
 
 The supplied environment values target the Compose network: `postgres`, `redis`, and `kafka` are container hostnames. Kafka advertises `kafka:9092`, so the examples below run Kafka tools inside its container. Running the application on the host requires host-specific connection strings and a Kafka listener advertised to the host. Compose reads `.env.local`; `dotnet run` does not load it automatically.
 
-## Report behavior
+## End-to-end example
 
-- The ratio is **views / payments**: 100 views and 10 payments produce `10.0`.
-- Actions use their registration time in UTC. The report includes actions for its item between `StartDate` and `EndDate`, including both boundaries.
-- Creating a report sets `Processing`. Send a separate calculation command to complete it; there is no built-in scheduler.
-- Calculation requires at least one payment. Otherwise it returns a retryable error and leaves the report unchanged.
-- Successful calculation sets `Done`. Repeating it preserves the original ratio and produces no additional event. Create a new report for a new calculation.
-- Cancellation sets `Canceled` and is terminal. It can cancel a completed report while preserving its ratio. Repeated cancellation has no further effect.
+Keep the application running and open another terminal at the repository root. This example also requires [grpcurl](https://github.com/fullstorydev/grpcurl) on the host. Use the sample item only for this example; choose a new item ID and new idempotency keys for an independent run.
+
+1. Register one view and one payment. Both messages use the same Kafka key so they reach the same partition and the view is processed first:
+
+   ```bash
+   printf '%s\n' \
+     'e58b37a1-a2ca-45f4-89b5-921701925eaa|{"ItemId":"e58b37a1-a2ca-45f4-89b5-921701925eaa","ActionType":"View","IdempotencyKey":"1e528c9a-777d-4273-b856-9238a46af198"}' \
+     'e58b37a1-a2ca-45f4-89b5-921701925eaa|{"ItemId":"e58b37a1-a2ca-45f4-89b5-921701925eaa","ActionType":"Payment","IdempotencyKey":"c113b859-74d3-483c-a361-105249dbcf04"}' \
+     | docker compose exec -T kafka kafka-console-producer \
+         --bootstrap-server kafka:9092 --topic actions \
+         --property parse.key=true --property 'key.separator=|'
+   ```
+
+2. Create a report with a period that includes the actions' registration time:
+
+   ```bash
+   printf '%s\n' '{"ItemId":"e58b37a1-a2ca-45f4-89b5-921701925eaa","StartDate":"2000-01-01T00:00:00Z","EndDate":"2100-01-01T00:00:00Z","IdempotencyKey":"ec5c1de7-c29c-445a-b849-2e34f8669a97"}' \
+     | docker compose exec -T kafka kafka-console-producer \
+         --bootstrap-server kafka:9092 --topic reports.create
+   ```
+
+3. Read creation events, find the event with the sample `ItemId`, and copy its `Id`. Stop the consumer with Ctrl+C:
+
+   ```bash
+   docker compose exec kafka kafka-console-consumer \
+     --bootstrap-server kafka:9092 --topic ReportCreated --from-beginning
+   ```
+
+4. Substitute that ID below and request calculation:
+
+   ```bash
+   report_id='<Id from ReportCreated>'
+   printf '{"ReportId":"%s","IdempotencyKey":"7102763b-311b-4a20-84e0-283a83e637ae"}\n' "$report_id" \
+     | docker compose exec -T kafka kafka-console-producer \
+         --bootstrap-server kafka:9092 --topic reports.count-ratio
+   ```
+
+   Commands on different topics are processed independently. If calculation arrives before the payment is registered, it retries automatically.
+
+5. Read the report from the same terminal:
+
+   ```bash
+   grpcurl -plaintext \
+     -import-path src/ConversionReporter.Contracts.Grpc \
+     -proto report.proto \
+     -d "{\"report_id\":\"$report_id\"}" \
+     localhost:5177 report.Report/GetReport
+   ```
+
+   If the status is still `Processing`, repeat the read. The expected result is `status: "Done"` and `ratio: 1` for one view and one payment.
 
 ## Kafka interface
 
@@ -66,17 +119,17 @@ docker compose exec kafka kafka-console-consumer \
   --bootstrap-server kafka:9092 --topic ReportCreated --from-beginning
 ```
 
-Event keys contain the report ID. The `event-id` header contains the stable outbox message ID. Delivery is **at least once**: consumers must deduplicate that ID. Publication follows report order; consumers of different topics can observe events in a different order.
+Event keys contain the report ID. The `event-id` header contains the stable outbox message ID. Delivery is **at least once**: consumers must deduplicate that ID. For each report, the outbox publishes earlier events before later ones; a retryable delivery failure blocks that report's later events. Consumers of different topics can still observe events in a different order. Quarantined events stop blocking publication; see [Outbox recovery](#outbox-recovery).
 
 ### Failures and retries
 
 | Outcome | Consumer behavior |
 | --- | --- |
 | Success | Commit the source offset after processing |
-| Invalid JSON, validation failure, or terminal conflict | Publish to `<source-topic>.dead-letter`, then commit |
+| Invalid JSON, command validation failure, or business conflict (such as calculating a canceled report) | Publish to `<source-topic>.dead-letter`, then commit |
 | Other business errors, database failures, or failed delivery | Retry from the same offset |
 
-A failed command holds up later messages in its partition. There is no command retry limit. Dead-letter messages include `Topic`, `Partition`, `Offset`, `Payload`, and `Error`; if dead-letter delivery fails, the source offset remains uncommitted.
+A retryable failure holds up later messages in its partition. Examples include calculating a report with no payments or calculating/canceling an unknown report. There is no command retry limit. Dead-letter messages include `Topic`, `Partition`, `Offset`, `Payload`, and `Error`; if dead-letter delivery fails, the source offset remains uncommitted.
 
 ## gRPC interface
 
@@ -93,6 +146,27 @@ grpcurl -plaintext \
 Replace `<report-id>` with an ID from `ReportCreated`. The response contains `id`, `item_id`, UTC `start_date` and `end_date`, `status`, and `ratio`. An uncalculated ratio is returned as `0`; use `status` to distinguish it from a calculated zero.
 
 Expected status codes: `OK`, `INVALID_ARGUMENT` for a malformed GUID, and `NOT_FOUND` for an unknown report.
+
+## Configuration
+
+Connection settings are shown in [.env.example](.env.example); image tags and local infrastructure settings live in [docker-compose.yml](docker-compose.yml). Package versions are defined in the project files.
+
+Optional settings under `Outbox`:
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `BatchSize` | `100` | Maximum records claimed per batch |
+| `MaxParallelism` | `8` | Concurrent publications per worker |
+| `PollInterval` | `00:00:01` | Delay when no records are ready or a batch fails |
+| `RetryDelay` | `00:00:01` | Initial delivery retry delay |
+| `MaxRetryDelay` | `00:05:00` | Maximum delivery retry delay |
+| `MaxAttempts` | `0` | Unlimited retries; a positive value enables quarantine |
+
+Environment variables use double underscores, for example `Outbox__BatchSize=200`. With a positive attempt limit, exhausted records stay in `outbox_messages` with `failed_at` set and stop blocking later events.
+
+### Outbox recovery
+
+After fixing delivery, replay a selected unprocessed record by setting `failed_at = NULL`, `attempt_count = 0`, and `next_attempt_at = now()`. There is no replay API. Later events may already have been published while the record was quarantined, so replay can deliver an older event after newer ones.
 
 ## Architecture and consistency
 
@@ -111,23 +185,6 @@ The command pipeline runs **validation → transaction → idempotency → handl
 Reads check the report version in PostgreSQL before using a matching Redis snapshot. A delayed cache fill cannot replace a newer version. Each cache entry expires after one hour; reads still require PostgreSQL and Redis availability.
 
 Outbox workers claim rows with `FOR UPDATE SKIP LOCKED` and publish independent reports in parallel. An earlier retryable event blocks later events for the same report. Failed deliveries use exponential backoff; successful retries clear the error. Ready batches drain without a polling pause. Automatic cleanup of processed outbox records and idempotency records is not implemented.
-
-## Configuration
-
-Connection settings are shown in [.env.example](.env.example); image tags and local infrastructure settings live in [docker-compose.yml](docker-compose.yml). Package versions are defined in the project files.
-
-Optional settings under `Outbox`:
-
-| Setting | Default | Purpose |
-| --- | --- | --- |
-| `BatchSize` | `100` | Maximum records claimed per batch |
-| `MaxParallelism` | `8` | Concurrent publications per worker |
-| `PollInterval` | `00:00:01` | Delay when no records are ready or a batch fails |
-| `RetryDelay` | `00:00:01` | Initial delivery retry delay |
-| `MaxRetryDelay` | `00:05:00` | Maximum delivery retry delay |
-| `MaxAttempts` | `0` | Unlimited retries; a positive value enables quarantine |
-
-Environment variables use double underscores, for example `Outbox__BatchSize=200`. With a positive attempt limit, exhausted records stay in `outbox_messages` with `failed_at` set and stop blocking later events. After fixing delivery, replay a selected unprocessed record by setting `failed_at = NULL`, `attempt_count = 0`, and `next_attempt_at = now()`. There is no replay API.
 
 ## Tests
 
