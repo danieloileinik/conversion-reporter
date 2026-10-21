@@ -9,7 +9,14 @@ public class GetReportHandler(AppDbContext db, IReportReadCache cache)
 {
     public async Task<GetReportResponse?> Handle(GetReportQuery request, CancellationToken ct)
     {
-        var cached = await cache.GetAsync(request.ReportId, ct);
+        var version = await db
+            .Reports
+            .Where(r => r.Id == request.ReportId)
+            .Select(r => (long?)r.Version)
+            .SingleOrDefaultAsync(ct);
+        if (version is null) return null;
+
+        var cached = await cache.GetAsync(request.ReportId, version.Value, ct);
         if (cached != null) return cached;
 
         var response = await db
@@ -21,7 +28,8 @@ public class GetReportHandler(AppDbContext db, IReportReadCache cache)
                 r.StartDate,
                 r.EndDate,
                 r.Status.ToString(),
-                r.Ratio == null ? null : r.Ratio.Value.Value))
+                r.Ratio == null ? null : r.Ratio.Value.Value,
+                r.Version))
             .FirstOrDefaultAsync(ct);
 
         if (response is null) return null;

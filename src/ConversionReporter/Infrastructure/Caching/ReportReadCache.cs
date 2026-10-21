@@ -10,19 +10,17 @@ public sealed class ReportReadCache(IConnectionMultiplexer redis) : IReportReadC
     private static readonly TimeSpan Expiry = TimeSpan.FromHours(1);
     private readonly IDatabase _db = redis.GetDatabase();
 
-    public async Task<GetReportResponse?> GetAsync(Guid reportId, CancellationToken ct = default)
+    public async Task<GetReportResponse?> GetAsync(Guid reportId, long version, CancellationToken ct = default)
     {
-        var value = await _db.StringGetAsync($"report:{reportId}");
+        var value = await _db.StringGetAsync($"report:v2:{reportId}:{version}");
         return value.HasValue ? JsonSerializer.Deserialize<GetReportResponse>(value.ToString()) : null;
     }
 
     public Task SetAsync(GetReportResponse response, CancellationToken ct = default)
     {
-        return _db.StringSetAsync($"report:{response.Id}", JsonSerializer.Serialize(response), Expiry);
-    }
-
-    public Task InvalidateAsync(Guid reportId, CancellationToken ct = default)
-    {
-        return _db.KeyDeleteAsync($"report:{reportId}");
+        return _db.StringSetAsync(
+            $"report:v2:{response.Id}:{response.Version}",
+            JsonSerializer.Serialize(response),
+            Expiry);
     }
 }

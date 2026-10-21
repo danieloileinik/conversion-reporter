@@ -6,4 +6,5 @@ public record GetReportResponse(
     DateTime StartDate,
     DateTime EndDate,
     string Status,
-    double? Ratio);
+    double? Ratio,
+    long Version = 1);
